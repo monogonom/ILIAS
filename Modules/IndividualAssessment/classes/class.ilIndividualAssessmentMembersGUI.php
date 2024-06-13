@@ -197,9 +197,6 @@ class ilIndividualAssessmentMembersGUI
 
         $output = $table->render($view_controls);
 
-        if (count($entries) == 0) {
-            $output .= $this->txt("iass_no_entries");
-        }
         $this->tpl->setContent($output);
     }
 
@@ -278,7 +275,7 @@ class ilIndividualAssessmentMembersGUI
         if (!$this->iass_access->mayEditMembers()) {
             $this->handleAccessViolation();
         }
-        $usr_id = $this->post_wrapper->retrieve("usr_id", $this->refinery->kindlyTo()->int());
+        $usr_id = $this->request_wrapper->retrieve("usr_id", $this->refinery->kindlyTo()->int());
         $iass = $this->object;
         $iass->loadMembers()
             ->withoutPresentUser(new ilObjUser($usr_id))

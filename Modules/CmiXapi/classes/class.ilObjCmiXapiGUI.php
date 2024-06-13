@@ -109,7 +109,7 @@ class ilObjCmiXapiGUI extends ilObject2GUI
         $item->setRequired(true);
         $types = ilCmiXapiLrsTypeList::getTypesData(false, ilCmiXapiLrsType::AVAILABILITY_CREATE);
         foreach ($types as $type) {
-            $option = new ilRadioOption($type['title'], (string) $type['type_id'], $type['description']);
+            $option = new ilRadioOption((string) $type['title'], (string) $type['type_id'], (string) $type['description']);
             $item->addOption($option);
         }
         #$item->setValue($this->object->typedef->getTypeId());
@@ -445,8 +445,15 @@ class ilObjCmiXapiGUI extends ilObject2GUI
 
             default:
 
-                $command = $DIC->ctrl()->getCmd(self::DEFAULT_CMD);
-                $this->{$command}();
+                if($DIC->ctrl()->getCmd() == "settings") {
+                    $DIC->tabs()->activateTab(self::TAB_ID_SETTINGS);
+                    $DIC->ctrl()->setCmd('show');
+                    $gui = new ilCmiXapiSettingsGUI($obj);
+                    $DIC->ctrl()->forwardCommand($gui);
+                } else {
+                    $command = $DIC->ctrl()->getCmd(self::DEFAULT_CMD);
+                    $this->{$command}();
+                }
         }
     }
 
@@ -707,7 +714,7 @@ class ilObjCmiXapiGUI extends ilObject2GUI
         global $DIC;
         /* @var \ILIAS\DI\Container $DIC */
 
-        if (!$this->object->getOfflineStatus() && $this->object->getLrsType()->isAvailable()) {
+        if (!$this->object->getOfflineStatus() && $this->object->getLrsType()->isAvailable() && $this->checkPermissionBool("read")) {
             // TODO : check if this is the correct query
             // p.e. switched to another privacyIdent before: user exists but not with the new privacyIdent
             // re_check for isSourceTypeExternal
@@ -742,29 +749,29 @@ class ilObjCmiXapiGUI extends ilObject2GUI
                 );
                 $DIC->toolbar()->addComponent($button);
             } else {
-                //                $launchButton = ilLinkButton::getInstance();
-                //                $launchButton->setPrimary(true);
-                //                $launchButton->setCaption('launch');
-                //
-                //                if ($this->object->getLaunchMethod() == ilObjCmiXapi::LAUNCH_METHOD_NEW_WIN) {
-                //                    $launchButton->setTarget('_blank');
-                //                }
-                //
-                //                $launchButton->setUrl($DIC->ctrl()->getLinkTargetByClass(
-                //                    ilCmiXapiLaunchGUI::class
-                //                ));
-                //
-                //                $DIC->toolbar()->addButtonInstance($launchButton);
+                $launchButton = ilLinkButton::getInstance();
+                $launchButton->setPrimary(true);
+                $launchButton->setCaption('launch');
+
+                if ($this->object->getLaunchMethod() == ilObjCmiXapi::LAUNCH_METHOD_NEW_WIN) {
+                    $launchButton->setTarget('_blank');
+                }
+
+                $launchButton->setUrl($DIC->ctrl()->getLinkTargetByClass(
+                    ilCmiXapiLaunchGUI::class
+                ));
+
+                $DIC->toolbar()->addButtonInstance($launchButton);
 
                 //todo
                 //                if ($this->object->getLaunchMethod() == ilObjCmiXapi::LAUNCH_METHOD_NEW_WIN) {
                 //                    setTarget('_blank');
                 //                }
-                $button = $DIC->ui()->factory()->button()->primary(
-                    $this->lng->txt('launch'),
-                    $DIC->ctrl()->getLinkTargetByClass(ilCmiXapiLaunchGUI::class)
-                );
-                $DIC->toolbar()->addComponent($button);
+                //                $button = $DIC->ui()->factory()->button()->primary(
+                //                    $this->lng->txt('launch'),
+                //                    $DIC->ctrl()->getLinkTargetByClass(ilCmiXapiLaunchGUI::class)
+                //                );
+                //                $DIC->toolbar()->addComponent($button);
             }
 
             /**

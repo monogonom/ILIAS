@@ -649,7 +649,7 @@ class ilLOEditorGUI
             $assignment = new ilLOTestAssignment($assign_id);
 
             $obj_id = ilObject::_lookupObjId($assignment->getTestRefId());
-            $confirm->addItem('tst[]', $assign_id, ilObject::_lookupTitle($obj_id));
+            $confirm->addItem('tst[]', (string) $assign_id, ilObject::_lookupTitle($obj_id));
         }
 
         $this->tpl->setContent($confirm->getHTML());
@@ -702,7 +702,7 @@ class ilLOEditorGUI
 
         foreach ($tests as $tst_id) {
             $obj_id = ilObject::_lookupObjId($tst_id);
-            $confirm->addItem('tst[]', $tst_id, ilObject::_lookupTitle($obj_id));
+            $confirm->addItem('tst[]', (string) $tst_id, ilObject::_lookupTitle($obj_id));
         }
         $this->tpl->setContent($confirm->getHTML());
 
@@ -893,9 +893,10 @@ class ilLOEditorGUI
                 $tst->createReference();
                 $tst->putInTree($this->getParentObject()->getRefId());
                 $tst->setPermissions($this->getParentObject()->getRefId());
-                $tst->setQuestionSetType($form->getInput('qtype'));
-
-                $tst->saveToDb();
+                $general_settings = $tst->getMainSettings()->getGeneralSettings()->withQuestionSetType($form->getInput('qtype'));
+                $tst->getMainSettingsRepository()->store(
+                    $tst->getMainSettings()->withGeneralSettings($general_settings)
+                );
 
                 $assignment = new ilLOTestAssignment();
                 $assignment->setContainerId($this->getParentObject()->getId());
@@ -966,9 +967,10 @@ class ilLOEditorGUI
                 $tst->createReference();
                 $tst->putInTree($this->getParentObject()->getRefId());
                 $tst->setPermissions($this->getParentObject()->getRefId());
-                $tst->setQuestionSetType($form->getInput('qtype'));
-
-                $tst->saveToDb();
+                $general_settings = $tst->getMainSettings()->getGeneralSettings()->withQuestionSetType($form->getInput('qtype'));
+                $tst->getMainSettingsRepository()->store(
+                    $tst->getMainSettings()->withGeneralSettings($general_settings)
+                );
 
                 if ($this->getTestType() == self::TEST_TYPE_IT) {
                     $this->getSettings()->setInitialTest($tst->getRefId());

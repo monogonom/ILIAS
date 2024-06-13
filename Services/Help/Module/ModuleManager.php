@@ -100,6 +100,14 @@ class ModuleManager
         return (count($this->getActiveModules()) > 0);
     }
 
+    public function areTooltipsActive(): bool
+    {
+        if ($this->settings->get("help_mode") === "1") {
+            return false;
+        }
+        return $this->isHelpActive();
+    }
+
     public function isAuthoringMode(): bool
     {
         return ($this->getAuthoringLMId() > 0);
@@ -141,8 +149,8 @@ class ModuleManager
         $lm_id = $this->repo->lookupModuleLmId($id);
 
         // delete learning module
-        if (\ilObject::_lookupType((int) $rec["lm_id"]) === "lm") {
-            $lm = new \ilObjLearningModule((int) $rec["lm_id"], false);
+        if (\ilObject::_lookupType($lm_id) === "lm") {
+            $lm = new \ilObjLearningModule($lm_id, false);
             $lm->delete();
         }
 

@@ -178,6 +178,7 @@ class ilDclRecordListTableGUI extends ilTable2GUI
             }
 
             $this->ctrl->setParameterByClass(ilDclFieldEditGUI::class, "record_id", $record->getId());
+            $this->ctrl->setParameterByClass(ilDclDetailedViewGUI::class, "table_id", $record->getTableId());
             $this->ctrl->setParameterByClass(ilDclDetailedViewGUI::class, "record_id", $record->getId());
             $this->ctrl->setParameterByClass(ilDclDetailedViewGUI::class, "tableview_id", $this->tableview->getId());
             $this->ctrl->setParameterByClass(ilDclRecordEditGUI::class, "record_id", $record->getId());
@@ -212,17 +213,15 @@ class ilDclRecordListTableGUI extends ilTable2GUI
             }
 
             if ($this->table->getPublicCommentsEnabled()) {
-                $action_links[] = $this->ui->factory()->link()->standard(
-                    $this->lng->txt('dcl_comments'),
-                    $this->ctrl->getLinkTargetByClass(ilDclRecordEditGUI::class, 'confirmDelete')
-                );
-
                 $js_code = $this->getCommentJsLinkCode($record->getId());
                 $action_links[] = $this->ui->factory()->button()->shy(
                     $this->lng->txt('dcl_comments'),
                     "#"
                 )->withAdditionalOnLoadCode(function ($id) use ($js_code) {
-                    return $js_code;
+                    return "document.getElementById('$id').addEventListener('click',function()
+                        { 
+                            $js_code
+                        });";
                 });
             }
             $action_dropdown = $this->ui->factory()->dropdown()->standard($action_links)

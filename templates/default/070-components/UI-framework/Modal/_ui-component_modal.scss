@@ -38,6 +38,7 @@ $modal-inner-padding: $il-padding-xlarge-vertical $il-padding-xlarge-horizontal;
 $il-modal-transition-speed: 0.15s;
 $il-modal-light-color: $il-main-bg;
 $il-modal-dark-color: $il-neutral-color;
+$il-modal-dark-carousel-color: $il-main-bg !default;
 
 //
 // Modals
@@ -90,12 +91,14 @@ $il-modal-dark-color: $il-neutral-color;
 			.modal-header {
 				border-bottom-color: $il-modal-light-color;
 			}
+			.carousel-control {
+				color: $il-modal-dark-carousel-color;
+			}
 		}
 		.close {
 			color: $il-modal-light-color;
 			background-color: $il-modal-dark-color;
 			opacity: 1;
-			border: 1px solid $il-main-border-color;
 		}
 	}
   }
@@ -164,6 +167,7 @@ $il-modal-dark-color: $il-neutral-color;
 	padding: $modal-inner-padding;
 
 	  .il-standard-form {
+		  padding: 0;
 		  .il-standard-form-header + .il-section-input {
 			  margin-top: 0;
 		  }

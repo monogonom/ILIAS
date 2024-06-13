@@ -26,6 +26,7 @@ use ILIAS\Container\Content\BlockSequencePart;
 use ILIAS\Container\Content\ItemSetManager;
 use ILIAS\Container\Content;
 use ILIAS\Container\InternalDomainService;
+use ILIAS\COPage\PC\Resources\ResourcesManager;
 
 /**
  * Generates concrete blocks with items
@@ -34,6 +35,7 @@ use ILIAS\Container\InternalDomainService;
  */
 class ItemBlockSequenceGenerator
 {
+    protected ResourcesManager $copage_resources;
     protected bool $include_empty_blocks;
     protected Content\ModeManager $mode_manager;
     protected \ilAccessHandler $access;
@@ -56,6 +58,7 @@ class ItemBlockSequenceGenerator
     public function __construct(
         DataService $data_service,
         InternalDomainService $domain_service,
+        ResourcesManager $copage_resources,
         \ilContainer $container,
         BlockSequence $block_sequence,
         ItemSetManager $item_set_manager,
@@ -64,12 +67,16 @@ class ItemBlockSequenceGenerator
         $this->access = $domain_service->access();
         $this->data_service = $data_service;
         $this->domain_service = $domain_service;
+        $this->copage_resources = $copage_resources;
         $this->block_sequence = $block_sequence;
         $this->item_set_manager = $item_set_manager;
         $this->container = $container;
-        $this->block_limit = (int) \ilContainer::_lookupContainerSetting($container->getId(), "block_limit");
         $this->mode_manager = $this->domain_service->content()->mode($container);
         $this->include_empty_blocks = $include_empty_blocks;
+        $this->block_limit = 0;
+        if (!$this->mode_manager->isActiveItemOrdering()) {
+            $this->block_limit = (int) \ilContainer::_lookupContainerSetting($container->getId(), "block_limit");
+        }
     }
 
     public function getSequence(): ItemBlockSequence
@@ -255,6 +262,7 @@ class ItemBlockSequenceGenerator
                         $ref_ids[] = (int) $data["ref_id"];
                     }
                 }
+                $this->accumulateRefIds($ref_ids);
                 yield $this->data_service->itemBlock(
                     "_lobj",
                     $part,
@@ -323,6 +331,7 @@ class ItemBlockSequenceGenerator
         if (!$this->has_other_block) {
             return null;
         }
+
         $remaining_ref_ids = array_filter(
             $this->item_set_manager->getAllRefIds(),
             fn($i) => (!isset($this->accumulated_ref_ids[$i]) && !$this->item_set_manager->isSideBlockItem($i))
@@ -373,6 +382,11 @@ class ItemBlockSequenceGenerator
         $ref_ids = $this->getItemGroupItemRefIds($item_group_ref_id);
         $this->accumulateRefIds($ref_ids);
         $block_items = $this->determineBlockItems($ref_ids);
+        // #16493
+        if (!$this->access->checkAccess("visible", "", $item_group_ref_id) ||
+            !$this->access->checkAccess("read", "", $item_group_ref_id)) {
+            return null;
+        }
         // otherwise empty item groups will simply "vanish" from the repository
         if (count($block_items->getRefIds()) > 0 || $this->access->checkAccess('write', '', $item_group_ref_id)) {
             return $this->data_service->itemBlock(
@@ -390,36 +404,15 @@ class ItemBlockSequenceGenerator
      */
     public function getPageEmbeddedBlockIds(): array
     {
-        $ids = [];
         $page = $this->domain_service->page($this->container);
-        $container_page_html = $page->getHtml();
+        $dom = $page->getDom();
 
-        $type_grps = $this->getGroupedObjTypes();
-        // iterate all types
-        foreach ($type_grps as $type => $v) {
-            // set template (overall or type specific)
-            if (is_int(strpos($container_page_html, "[list-" . $v . "]"))) {
-                $ids[] = $v;
-            }
+        $ids = [];
+
+        if ($dom) {
+            $ids = $this->copage_resources->getResourceIds($dom);
         }
 
-        $type = "_other";
-        if (is_int(strpos($container_page_html, "[list-" . $type . "]"))) {
-            $ids[] = $type;
-        }
-        $type = "_lobj";
-        if (is_int(strpos($container_page_html, "[list-" . $type . "]"))) {
-            $ids[] = $type;
-        }
-        // determine item groups
-        while (preg_match('~\[(item-group-([0-9]*))\]~i', $container_page_html, $found)) {
-            $ids[] = $found[2];
-            $container_page_html = preg_replace(
-                '~\[' . $found[1] . '\]~i',
-                "",
-                $container_page_html
-            );
-        }
         return $ids;
     }
 }

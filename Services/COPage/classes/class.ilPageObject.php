@@ -379,8 +379,15 @@ abstract class ilPageObject
             return true;
         }
         $error = null;
+        if ($this->getXMLContent() === "") {
+            $this->setXMLContent("<PageObject></PageObject>");
+        }
         $this->dom = $this->dom_util->docFromString($this->getXMLContent(true), $error);
         $path = "//PageObject";
+        if (is_null($this->dom)) {
+            throw new ilCOPageException("Invalid page xml (" .
+                $this->getId() . "," . $this->getLanguage() . "): " . $this->getXMLContent(true));
+        }
         $nodes = $this->dom_util->path($this->dom, $path);
         if (count($nodes) == 1) {
             $this->node = $nodes->item(0);
@@ -1084,7 +1091,7 @@ s     */
     /**
      * Validate the page content agains page DTD
      */
-    public function validateDom(): ?array
+    public function validateDom(bool $throw = false): ?array
     {
         $this->stripHierIDs();
 
@@ -1092,7 +1099,7 @@ s     */
         //libxml_disable_entity_loader(false);
 
         $error = null;
-        $this->dom_util->validate($this->dom, $error);
+        $this->dom_util->validate($this->dom, $error, $throw);
         return $error;
     }
 
@@ -1271,6 +1278,8 @@ s     */
         $this->buildDom(true);
         $dom_doc = $this->getDomDoc();
 
+        $errors = $this->validateDom(true);
+
         $iel = $this->containsDeactivatedElements($content);
         $inl = $this->containsIntLinks($content);
         // create object
@@ -1313,6 +1322,8 @@ s     */
 
         $this->buildDom(true);
         $dom_doc = $this->getDomDoc();
+
+        $errors = $this->validateDom(true);
 
         $iel = $this->containsDeactivatedElements($content);
         $inl = $this->containsIntLinks($content);

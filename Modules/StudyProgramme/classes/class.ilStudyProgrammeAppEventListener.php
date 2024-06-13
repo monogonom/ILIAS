@@ -147,10 +147,13 @@ class ilStudyProgrammeAppEventListener
             case 'Modules/StudyProgramme':
                 switch ($event) {
                     case 'userSuccessful':
-                        $DIC->certificate()->userCertificates()->certificateCriteriaMet(
-                            (int) $parameter['usr_id'],
-                            (int) $parameter['prg_id']
-                        );
+                        try {
+                            $DIC->certificate()->userCertificates()->certificateCriteriaMet(
+                                (int) $parameter['usr_id'],
+                                (int) $parameter['prg_id']
+                            );
+                        } catch (\ilCouldNotFindCertificateTemplate $e) {
+                        }
                         break;
                 }
                 break;
@@ -174,11 +177,25 @@ class ilStudyProgrammeAppEventListener
 
     private static function onServiceTrackingUpdateStatus(array $parameter): void
     {
-        if ((int) $parameter["status"] !== ilLPStatus::LP_STATUS_COMPLETED_NUM) {
+        if ((int) $parameter["status"] !== ilLPStatus::LP_STATUS_COMPLETED_NUM
+            || $parameter["status"] === $parameter["old_status"]
+        ) {
+            return;
+        }
+        if(ilObject::_lookupType((int) $parameter["obj_id"]) !== 'crs') {
             return;
         }
 
-        ilObjStudyProgramme::setProgressesCompletedFor((int) $parameter["obj_id"], (int) $parameter["usr_id"]);
+        $crs_reference_obj_ids = ilContainerReference::_lookupSourceIds((int) $parameter["obj_id"]);
+        foreach ($crs_reference_obj_ids as $crsr_obj_id) {
+            foreach (ilObject::_getAllReferences($crsr_obj_id) as $crsr_ref_id) {
+                ilObjStudyProgramme::setProgressesCompletedIfParentIsProgrammeInLPCompletedMode(
+                    $crsr_ref_id,
+                    (int) $parameter["obj_id"],
+                    (int) $parameter["usr_id"]
+                );
+            }
+        }
     }
 
     private static function onServiceTreeInsertNode(array $parameter): void

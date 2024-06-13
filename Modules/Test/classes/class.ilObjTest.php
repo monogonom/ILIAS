@@ -26,6 +26,8 @@ use ILIAS\Filesystem\Stream\Streams;
 
 require_once 'Modules/Test/classes/inc.AssessmentConstants.php';
 
+use ILIAS\Refinery\Factory as Refinery;
+
 /**
  * Class ilObjTest
  *
@@ -78,8 +80,6 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
 
     private int $template_id = 0;
 
-    protected $oldOnlineStatus = null;
-
     protected bool $print_best_solution_with_result = true;
 
     protected bool $activation_visibility = false;
@@ -99,6 +99,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
 
     private TestManScoringDoneHelper $testManScoringDoneHelper;
     protected ilCtrlInterface $ctrl;
+    protected Refinery $refinery;
     protected ilSetting $settings;
     protected ilBenchmark $bench;
     protected ilTestParticipantAccessFilterFactory $participant_access_filter;
@@ -128,6 +129,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         /** @var ILIAS\DI\Container $DIC */
         global $DIC;
         $this->ctrl = $DIC['ilCtrl'];
+        $this->refinery = $DIC['refinery'];
         $this->settings = $DIC['ilSetting'];
         $this->bench = $DIC['ilBench'];
         $this->testrequest = $DIC->test()->internal()->request();
@@ -171,6 +173,11 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     public function getLocalDIC(): ILIAS\DI\Container
     {
         return ilTestDIC::dic();
+    }
+
+    public function getQuestionSetConfig(): ilTestQuestionSetConfig
+    {
+        return $this->question_set_config_factory->getQuestionSetConfig();
     }
 
     /**
@@ -547,29 +554,6 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
             }
         }
 
-        if (!$this->getOldOnlineStatus() && !$this->getOfflineStatus()) {
-            $newsItem = new ilNewsItem();
-            $newsItem->setContext($this->getId(), 'tst');
-            $newsItem->setPriority(NEWS_NOTICE);
-            $newsItem->setTitle('new_test_online');
-            $newsItem->setContentIsLangVar(true);
-            $newsItem->setContent('');
-            $newsItem->setUserId($this->user->getId());
-            $newsItem->setVisibility(NEWS_USERS);
-            $newsItem->create();
-        } elseif ($this->getOldOnlineStatus() && !$this->getOfflineStatus()) {
-            ilNewsItem::deleteNewsOfContext($this->getId(), 'tst');
-        } elseif (!$this->getOfflineStatus()) {
-            $newsId = ilNewsItem::getFirstNewsIdForContext($this->getId(), 'tst');
-            if ($newsId > 0) {
-                $newsItem = new ilNewsItem($newsId);
-                $newsItem->setTitle('new_test_online');
-                $newsItem->setContentIsLangVar(true);
-                $newsItem->setContent('');
-                $newsItem->update();
-            }
-        }
-
         $this->storeActivationSettings([
             'is_activation_limited' => $this->isActivationLimited(),
             'activation_starting_time' => $this->getActivationStartingTime(),
@@ -937,11 +921,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     */
     public function getReportingDate(): ?string
     {
-        $date = $this->getScoreSettings()->getResultSummarySettings()->getReportingDate();
-        if ($date) {
-            $date = $date->format('YmdHis'); //legacy-reasons ;(
-        }
-        return $date;
+        return $this->getScoreSettings()->getResultSummarySettings()->getReportingDate()?->format('YmdHis');
     }
 
     public function getNrOfTries(): int
@@ -1028,7 +1008,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     public function getProcessingTimeAsMinutes()
     {
         if ($this->processing_time !== null) {
-            if (preg_match("/(\d{2}):(\d{2}):(\d{2})/is", (string)$this->processing_time, $matches)) {
+            if (preg_match("/(\d{2}):(\d{2}):(\d{2})/is", (string) $this->processing_time, $matches)) {
                 return ($matches[1] * 60) + $matches[2];
             }
         }
@@ -1046,7 +1026,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     public function getProcessingTimeInSeconds($active_id = ""): int
     {
         $processing_time = $this->getMainSettings()->getTestBehaviourSettings()->getProcessingTime() ?? '';
-        if (preg_match("/(\d{2}):(\d{2}):(\d{2})/", (string)$processing_time, $matches)) {
+        if (preg_match("/(\d{2}):(\d{2}):(\d{2})/", (string) $processing_time, $matches)) {
             $extratime = $this->getExtraTime($active_id) * 60;
             return ($matches[1] * 3600) + ($matches[2] * 60) + $matches[3] + $extratime;
         } else {
@@ -1238,6 +1218,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         $this->db->manipulate("DELETE FROM tst_result_cache WHERE $IN_activeIds");
         $this->db->manipulate("DELETE FROM tst_sequence WHERE $IN_activeIds");
         $this->db->manipulate("DELETE FROM tst_times WHERE $IN_activeIds");
+        $this->db->manipulate('DELETE FROM ' . PassPresentedVariablesRepo::TABLE_NAME . ' WHERE ' . $this->db->in('active_id', $activeIds, false, 'integer'));
 
         if ($this->isRandomTest()) {
             $this->db->manipulate("DELETE FROM tst_test_rnd_qst WHERE $IN_activeIds");
@@ -1820,21 +1801,27 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         $arrResults = [];
 
         $query = "
-			SELECT		tst_test_result.question_fi,
-						tst_test_result.points reached,
-						tst_test_result.hint_count requested_hints,
-						tst_test_result.hint_points hint_points,
-						tst_test_result.answered answered
+            SELECT
+                tst_test_result.question_fi,
+                tst_test_result.points reached,
+                tst_test_result.hint_count requested_hints,
+                tst_test_result.hint_points hint_points,
+                tst_test_result.answered answered,
+                tst_manual_fb.finalized_evaluation finalized_evaluation
 
-			FROM		tst_test_result
+            FROM tst_test_result
 
-			LEFT JOIN	tst_solutions
-			ON			tst_solutions.active_fi = tst_test_result.active_fi
-			AND			tst_solutions.question_fi = tst_test_result.question_fi
+            LEFT JOIN tst_solutions
+            ON tst_solutions.active_fi = tst_test_result.active_fi
+            AND tst_solutions.question_fi = tst_test_result.question_fi
 
-			WHERE		tst_test_result.active_fi = %s
-			AND			tst_test_result.pass = %s
-		";
+            LEFT JOIN tst_manual_fb
+            ON tst_test_result.active_fi = tst_manual_fb.active_fi
+            AND tst_test_result.question_fi = tst_manual_fb.question_fi
+
+            WHERE tst_test_result.active_fi = %s
+            AND tst_test_result.pass = %s
+        ";
 
         $solutionresult = $this->db->queryF(
             $query,
@@ -1898,7 +1885,8 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                 "qid" => $row['question_id'],
                 "original_id" => $row["original_id"],
                 "workedthrough" => isset($arrResults[$row['question_id']]) ? 1 : 0,
-                'answered' => $arrResults[$row['question_id']]['answered'] ?? 0
+                'answered' => $arrResults[$row['question_id']]['answered'] ?? 0,
+                'finalized_evaluation' => $arrResults[$row['question_id']]['finalized_evaluation'] ?? 0,
             ];
 
             if (!isset($arrResults[ $row['question_id'] ]['answered']) || !$arrResults[ $row['question_id'] ]['answered']) {
@@ -2655,11 +2643,18 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                         while ($row = $this->db->fetchAssoc($result)) {
                             $tpass = array_key_exists("pass", $row) ? $row["pass"] : 0;
 
+                            if (
+                                !isset($row["question_fi"], $row["points"], $row["sequence"]) ||
+                                !is_numeric($row["question_fi"]) || !is_numeric($row["points"]) || !is_numeric($row["sequence"])
+                            ) {
+                                continue;
+                            }
+
                             $data->getParticipant($active_id)->addQuestion(
-                                $row["original_id"],
-                                $row["question_fi"],
-                                $row["points"],
-                                $row["sequence"],
+                                (int) $row["original_id"],
+                                (int) $row["question_fi"],
+                                (float) $row["points"],
+                                (int) $row["sequence"],
                                 $tpass
                             );
 
@@ -2940,7 +2935,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     {
         $name = "";
         if (strlen($firstname . $lastname . $title) == 0) {
-            $name = $this->lng->txt("deleted_user");
+            $name = $this->lng->txt('deleted_user');
         } else {
             if ($user_id == ANONYMOUS_USER_ID) {
                 $name = $lastname;
@@ -3088,7 +3083,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     public static function _instanciateQuestion($question_id): ?assQuestion
     {
         if (strcmp((string) $question_id, "") !== 0) {
-            return assQuestion::instantiateQuestion($question_id);
+            return assQuestion::instantiateQuestion((int) $question_id);
         }
 
         return null;
@@ -3343,7 +3338,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                     break;
 
                 case "highscore_score":
-                    $gamification_settings = $gamification_settings->withHighscoreScore((bool)$metadata["entry"]);
+                    $gamification_settings = $gamification_settings->withHighscoreScore((bool) $metadata["entry"]);
                     break;
 
                 case "highscore_percentage":
@@ -3370,7 +3365,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                     $gamification_settings = $gamification_settings->withHighscoreTopNum((int) $metadata["entry"]);
                     break;
                 case "use_previous_answers":
-                    $participant_functionality_settings = $participant_functionality_settings->withUsePreviousAnswerAllowed((bool)$metadata["entry"]);
+                    $participant_functionality_settings = $participant_functionality_settings->withUsePreviousAnswerAllowed((bool) $metadata["entry"]);
                     break;
                 case "title_output":
                     $question_behaviour_settings = $question_behaviour_settings->withQuestionTitleOutputMode((int) $metadata["entry"]);
@@ -3413,7 +3408,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                     $participant_functionality_settings = $participant_functionality_settings->withSuspendTestAllowed((bool) $metadata["entry"]);
                     break;
                 case "sequence_settings":
-                    $participant_functionality_settings->withPostponedQuestionsMoveToEnd((bool) $metadata["entry"]);
+                    $participant_functionality_settings = $participant_functionality_settings->withPostponedQuestionsMoveToEnd((bool) $metadata["entry"]);
                     break;
                 case "show_marker":
                     $participant_functionality_settings = $participant_functionality_settings->withQuestionMarkingEnabled((bool) $metadata["entry"]);
@@ -3440,7 +3435,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                     $result_details_settings = $result_details_settings->withExportSettings((int) $metadata["entry"]);
                     break;
                 case "score_cutting":
-                    $scoring_settings = $scoring_settings->withScoreCutting((int)$metadata["entry"]);
+                    $scoring_settings = $scoring_settings->withScoreCutting((int) $metadata["entry"]);
                     break;
                 case "password":
                     $access_settings = $access_settings->withPasswordEnabled(
@@ -3534,6 +3529,9 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                 case 'obligations_enabled':
                     $question_behaviour_settings = $question_behaviour_settings->withCompulsoryQuestionsEnabled((bool) $metadata['entry']);
                     break;
+                case 'show_summary':
+                    $participant_functionality_settings = $participant_functionality_settings->withQuestionListEnabled(($metadata['entry'] & 1) > 0)
+                        ->withUsrPassOverviewMode((int) $metadata['entry']);
             }
             if (preg_match("/mark_step_\d+/", $metadata["label"])) {
                 $xmlmark = $metadata["entry"];
@@ -3555,6 +3553,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                 ->withTitle($assessment->getTitle())
                 ->withDescription($assessment->getComment())
         );
+        $this->addToNewsOnOnline(false, $this->getObjectProperties()->getPropertyIsOnline()->getIsOnline());
         $main_settings = $main_settings
             ->withGeneralSettings($general_settings)
             ->withIntroductionSettings($introduction_settings)
@@ -3784,11 +3783,11 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         $a_xml_writer->xmlEndTag('qtimetadatafield');
 
         // score reporting date
-        if ($this->getReportingDate()) {
+        if ($this->getScoreSettings()->getResultSummarySettings()->getReportingDate() !== null) {
             $a_xml_writer->xmlStartTag("qtimetadatafield");
             $a_xml_writer->xmlElement("fieldlabel", null, "reporting_date");
             $reporting_date = $this->buildPeriodFromFormatedDateString(
-                $this->getScoreSettings()->getResultSummarySettings()->getReportingDate()->format('Y-m-d G:m:s')
+                $this->getScoreSettings()->getResultSummarySettings()->getReportingDate()->format('Y-m-d H:m:s')
             );
             $a_xml_writer->xmlElement("fieldentry", null, $reporting_date);
             $a_xml_writer->xmlEndTag("qtimetadatafield");
@@ -4589,15 +4588,8 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         $new_obj->setTmpCopyWizardCopyId($copy_id);
         $this->cloneMetaData($new_obj);
 
-        //copy online status if object is not the root copy object
-        $cp_options = ilCopyWizardOptions::_getInstance($copy_id);
-        if ($cp_options->isRootNode($this->getRefId())) {
-            $new_obj->getObjectProperties()->storePropertyIsOnline(
-                $new_obj->getObjectProperties()->getPropertyIsOnline()->withOffline()
-            );
-        }
-
         $new_obj->saveToDb();
+        $new_obj->addToNewsOnOnline(false, $new_obj->getObjectProperties()->getPropertyIsOnline()->getIsOnline());
         $this->getMainSettingsRepository()->store(
             $this->getMainSettings()->withTestId($new_obj->getTestId())
         );
@@ -4783,10 +4775,12 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     */
     public function getTextAnswer($active_id, $question_id, $pass = null): string
     {
-        $res = "";
         if (($active_id) && ($question_id)) {
-            if (is_null($pass)) {
+            if ($pass === null) {
                 $pass = assQuestion::_getSolutionMaxPass($question_id, $active_id);
+            }
+            if ($pass === null) {
+                return '';
             }
             $result = $this->db->queryF(
                 "SELECT value1 FROM tst_solutions WHERE active_fi = %s AND question_fi = %s AND pass = %s",
@@ -4794,11 +4788,10 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
                 [$active_id, $question_id, $pass]
             );
             if ($result->numRows() == 1) {
-                $row = $this->db->fetchAssoc($result);
-                $res = $row["value1"];
+                return $row["value1"];
             }
         }
-        return $res;
+        return '';
     }
 
     /**
@@ -4999,16 +4992,6 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
 
             if ($count > 0) {
                 switch ($filter) {
-                    case 1: // only active users
-                        if ($participant['active']) {
-                            $filtered_participants[$active_id] = $participant;
-                        }
-                        break;
-                    case 2: // only inactive users
-                        if (!$participant['active']) {
-                            $filtered_participants[$active_id] = $participant;
-                        }
-                        break;
                     case 3: // all users
                         $filtered_participants[$active_id] = $participant;
                         break;
@@ -5461,14 +5444,14 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         }
 
         $bestrow = null;
-        $bestfactor = 0;
+        $bestfactor = 0.0;
         while ($row = $ilDB->fetchAssoc($result)) {
-            if ($row["maxpoints"] > 0) {
-                $factor = $row["points"] / $row["maxpoints"];
+            if ($row["maxpoints"] > 0.0) {
+                $factor = (float) ($row["points"] / $row["maxpoints"]);
             } else {
-                $factor = 0;
+                $factor = 0.0;
             }
-            if ($factor === 0.0 && $bestfactor === 0
+            if ($factor === 0.0 && $bestfactor === 0.0
                 || $factor > $bestfactor) {
                 $bestrow = $row;
                 $bestfactor = $factor;
@@ -5757,6 +5740,8 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
 
     public function &getTestQuestions(): array
     {
+        $tags_trafo = $this->refinery->string()->stripTags();
+
         $query = "
 			SELECT		questions.*,
 						questtypes.type_tag,
@@ -5789,11 +5774,12 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         $questions = [];
 
         while ($row = $this->db->fetchAssoc($query_result)) {
-            $question = $row;
+            $row['title'] = $tags_trafo->transform($row['title']);
+            $row['description'] = $tags_trafo->transform($row['description'] !== '' && $row['description'] !== null ? $row['description'] : '&nbsp;');
+            $row['author'] = $tags_trafo->transform($row['author']);
+            $row['obligationPossible'] = self::isQuestionObligationPossible($row['question_id']);
 
-            $question['obligationPossible'] = self::isQuestionObligationPossible($row['question_id']);
-
-            $questions[] = $question;
+            $questions[] = $row;
         }
 
         return $questions;
@@ -7396,16 +7382,6 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         return $this->online;
     }
 
-    public function getOldOnlineStatus()
-    {
-        return $this->oldOnlineStatus;
-    }
-
-    public function setOldOnlineStatus($oldOnlineStatus): void
-    {
-        $this->oldOnlineStatus = $oldOnlineStatus;
-    }
-
     public function isOfferingQuestionHintsEnabled(): bool
     {
         return $this->getMainSettings()->getQuestionBehaviourSettings()->getQuestionHintsEnabled();
@@ -7966,6 +7942,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         $scoring = new ilTestScoring($this, $this->db);
         $scoring->setPreserveManualScores($preserve_manscoring);
         $scoring->recalculateSolutions();
+        ilLPStatusWrapper::_updateStatus($this->getId(), $this->user->getId());
     }
 
     public static function getTestObjIdsWithActiveForUserId($userId): array
@@ -8070,6 +8047,7 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
         $active_id = $test_obj->getActiveIdOfUser($user_id);
 
         $test_session_factory = new ilTestSessionFactory($test_obj, $ilDB, $ilUser);
+
         // Added temporarily bugfix smeyer
         $test_session_factory->reset();
 
@@ -8426,5 +8404,37 @@ class ilObjTest extends ilObject implements ilMarkSchemaAware
     public function resetMarkSchema(): void
     {
         $this->mark_schema->flush();
+    }
+
+    public function addToNewsOnOnline(
+        bool $old_online_status,
+        bool $new_online_status
+    ): void {
+        if (!$old_online_status && $new_online_status) {
+            $newsItem = new ilNewsItem();
+            $newsItem->setContext($this->getId(), 'tst');
+            $newsItem->setPriority(NEWS_NOTICE);
+            $newsItem->setTitle('new_test_online');
+            $newsItem->setContentIsLangVar(true);
+            $newsItem->setContent('');
+            $newsItem->setUserId($this->user->getId());
+            $newsItem->setVisibility(NEWS_USERS);
+            $newsItem->create();
+            return;
+        }
+
+        if ($old_online_status && !$new_online_status) {
+            ilNewsItem::deleteNewsOfContext($this->getId(), 'tst');
+            return;
+        }
+
+        $newsId = ilNewsItem::getFirstNewsIdForContext($this->getId(), 'tst');
+        if (!$new_online_status && $newsId > 0) {
+            $newsItem = new ilNewsItem($newsId);
+            $newsItem->setTitle('new_test_online');
+            $newsItem->setContentIsLangVar(true);
+            $newsItem->setContent('');
+            $newsItem->update();
+        }
     }
 }

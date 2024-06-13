@@ -91,6 +91,8 @@ class ilTestResultsFactory
             $usr_score = $qresult['reached'];
             $workedthrough = (bool)$qresult['workedthrough'];
             $answered = (bool)$qresult['answered'];
+            $requested_hints = (int)$qresult['requested_hints'];
+
 
             $question_gui = $test_obj->createQuestionGUI("", $qid);
             $shuffle_trafo = $this->shuffler->getAnswerShuffleFor($qid, $active_id, $pass_id);
@@ -111,6 +113,23 @@ class ilTestResultsFactory
                 $show_question_text,
                 $show_inline_feedback
             );
+
+            if ($test_obj->getAutosave() &&
+                $type === 'assTextQuestion'
+            ) {
+                $usr_solution .= $question_gui->getAutoSavedSolutionOutput(
+                    $active_id,
+                    $pass_id,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true
+                );
+            }
 
             $graphical_output = false;
             $show_correct_solution = true;
@@ -151,6 +170,7 @@ class ilTestResultsFactory
                 $feedback,
                 $workedthrough,
                 $answered,
+                $requested_hints,
                 $recapitulation
             );
         }

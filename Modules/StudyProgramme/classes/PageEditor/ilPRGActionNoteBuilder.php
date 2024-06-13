@@ -58,7 +58,7 @@ class ilPRGActionNoteBuilder
 
     public function getNoteFor(int $prg_obj_id): string
     {
-        $ass = $this->getLatestAssignment($prg_obj_id);
+        $ass = $this->repo_assignment->getLatestAssignment($prg_obj_id, $this->usr_id);
         $instruction = '';
         $icon = 'page_editor/icon_pean.svg';
         $dealine_str = '';
@@ -69,13 +69,16 @@ class ilPRGActionNoteBuilder
             $deadline = null;
             $in_progress = array_filter($progresses, fn($pgs) => $pgs->isInProgress());
             $accredited_or_completed = array_filter($progresses, fn($pgs) => $pgs->isSuccessful());
-            if (count($progresses) === 0) {
+            if (count($in_progress) === 0) {
                 $failed = array_filter($progresses, fn($pgs) => $pgs->isFailed());
                 $failed = $this->sortByDeadline($failed);
-                if (count($failed) > 0 || $accredited_or_completed > 0) {
+                if (count($accredited_or_completed) > 0) {
+                    $instruction = 'pc_prgactionnote_no_actions_required';
+                }
+                if (count($failed) > 0 && count($accredited_or_completed) === 0) {
                     $instruction = 'pc_prgactionnote_no_actions_required';
                     $deadline = array_shift($failed)->getDeadline();
-                    $dealine_str = ' ' . $deadline->format('d.m.Y');
+                    $dealine_str = ' ' . $deadline->format($this->getUserDateFormat());
                 }
             } elseif($accredited_or_completed) {
                 $instruction = 'pc_prgactionnote_no_actions_required';
@@ -91,7 +94,7 @@ class ilPRGActionNoteBuilder
                 }
 
                 if (!is_null($deadline)) {
-                    $dealine_str = ' ' . $deadline->format('d.m.Y') . '.';
+                    $dealine_str = ' ' . $deadline->format($this->getUserDateFormat()) . '.';
                     $instruction = 'pc_prgactionnote_complete_content_with_deadline';
                 }
             }
@@ -112,18 +115,6 @@ class ilPRGActionNoteBuilder
         return $this->tpl->get();
     }
 
-    protected function getLatestAssignment(int $prg_obj_id): ?ilPRGAssignment
-    {
-        $assignments = $this->repo_assignment->getForUserOnNode($this->usr_id, $prg_obj_id);
-        usort(
-            $assignments,
-            fn(ilPRGAssignment $a, ilPRGAssignment $b)
-            => $a->getProgressTree()->getAssignmentDate() <=> $b->getProgressTree()->getAssignmentDate()
-        );
-        $assignments = array_reverse($assignments);
-        return $assignments ? current($assignments) : null;
-    }
-
     protected function sortByDeadline(array $progresses): array
     {
         $progresses = array_filter($progresses, fn($pgs) => $pgs->getDeadline());
@@ -139,5 +130,10 @@ class ilPRGActionNoteBuilder
             }
         );
         return $progresses;
+    }
+
+    protected function getUserDateFormat(): string
+    {
+        return ilCalendarUtil::getUserDateFormat(0, true);
     }
 }

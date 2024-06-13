@@ -557,15 +557,15 @@ class ilObjTaxonomyGUI extends ilObject2GUI
         $body = $this->request->getParsedBody();
 
         // save sorting
-        if (is_array($body["order"])) {
+        if (is_array($body["order"] ?? false)) {
             foreach ($body["order"] as $k => $v) {
-                ilTaxonomyNode::writeOrderNr(ilUtil::stripSlashes($k), $v);
+                ilTaxonomyNode::writeOrderNr((int) ilUtil::stripSlashes($k), (int) $v);
             }
             ilTaxonomyNode::fixOrderNumbers($this->getCurrentTaxonomyId(), $this->current_tax_node);
         }
 
         // save titles
-        if (is_array($body["title"])) {
+        if (is_array($body["title"] ?? false)) {
             foreach ($body["title"] as $k => $v) {
                 ilTaxonomyNode::writeTitle(
                     (int) $k,

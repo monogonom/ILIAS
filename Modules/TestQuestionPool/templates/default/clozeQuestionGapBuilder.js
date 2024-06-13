@@ -1,3 +1,19 @@
+/**
+ * This file is part of ILIAS, a powerful learning management system
+ * published by ILIAS open source e-Learning e.V.
+ *
+ * ILIAS is licensed with the GPL-3.0,
+ * see https://www.gnu.org/licenses/gpl-3.0.en.html
+ * You should have received a copy of said license along with the
+ * source code, too.
+ *
+ * If this is not the case or you just want to try ILIAS, you'll find
+ * us at:
+ * https://www.ilias.de
+ * https://github.com/ILIAS-eLearning
+ *
+ *********************************************************************/
+
 const ClozeGlobals = {
   clone_active: -1,
   active_gap: -1,
@@ -60,6 +76,9 @@ const ClozeQuestionGapBuilder = (function () {
         if (gap.type === 'text' || gap.type === 'select') {
           gap.values.forEach(
             (value) => {
+              if (value.answer === undefined) {
+                value.answer = '';
+              }
               value.answer = value.answer.replace('&#123;', '{');
               value.answer = value.answer.replace('&#125;', '}');
             },
@@ -440,7 +459,7 @@ const ClozeQuestionGapBuilder = (function () {
     let stringBuild = '';
     ClozeSettings.gaps_php[0][gap_count - 1].values.forEach((entry) => {
       if (entry.answer !== undefined) {
-        stringBuild += `${entry.answer.replace(/\[/g, '[&hairsp;')},`;
+        stringBuild += `${entry.answer.toString().replace(/\[/g, '[&hairsp;')},`;
       }
     });
     stringBuild = stringBuild.replace(/,+$/, '');
@@ -908,11 +927,13 @@ const ClozeQuestionGapBuilder = (function () {
         let number = true;
         let select_at_least_on_positive = false;
         entry.values.forEach((values) => {
-          points += parseFloat(values.points);
-          if (parseFloat(values.points) > 0) {
+          let points_value = values.points;
+          points_value = points_value.toString().replace(',', '.');
+          points += parseFloat(points_value);
+          if (parseFloat(points_value) > 0) {
             select_at_least_on_positive = true;
           }
-          if (isNaN(values.points) || values.points === '') {
+          if (isNaN(points_value) || points_value === '') {
             pro.highlightRed($(`#gap_${row}\\[points\\]\\[${counter}\\]`));
             number = false;
           } else {
@@ -955,7 +976,7 @@ const ClozeQuestionGapBuilder = (function () {
   };
 
   pro.checkInputIsNumeric = function (number, row, field) {
-    if (isNaN(number) || number === '') {
+    if (isNaN(number.toString().replace(',', '.')) || number === '') {
       pro.highlightRed($(`.gap_${row}_numeric${field}`));
       return 1;
     }
@@ -1465,7 +1486,7 @@ var ClozeGapCombinationBuilder = (function () {
           if (pos === value) {
             $.each(obj_inner_values.values, (l, value) => {
               const cleaned_answer_value = value.answer.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-              buildOptionsValue += `<option value="${value.answer}">${cleaned_answer_value}</option>`;
+              buildOptionsValue += `<option value="${value.answer}">${(obj_inner_values.type === 'numeric') ? ClozeSettings.inrange_text : cleaned_answer_value}</option>`;
             });
             if (obj_inner_values.type == 'numeric') {
               buildOptionsValue += `<option value="out_of_bound">${ClozeSettings.outofbound_text}</option>`;
@@ -1494,7 +1515,7 @@ var ClozeGapCombinationBuilder = (function () {
       $('#create_gap_combination').clone().attr({
         id: 'create_gap_combination_in_form',
         name: 'create_gap_combination_in_form',
-        class: 'btn btn-default btn-sm',
+        class: 'btn btn-default',
       }).prependTo(ClozeGlobals.form_footer_buttons);
       $('#create_gap_combination_in_form').on('click', () => {
         const position = ClozeSettings.gaps_combination.length;

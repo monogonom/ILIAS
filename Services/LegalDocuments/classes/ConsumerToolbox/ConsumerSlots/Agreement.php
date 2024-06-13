@@ -56,22 +56,36 @@ final class Agreement implements AgreementInterface
 
     public function showAgreement(string $gui, string $cmd): PageFragment
     {
-        return (new PageContent($this->ui->txt('usr_agreement'), [$this->showDocument()]));
+        $title = 'accept_usr_agreement_anonymous';
+        $info = 'accept_usr_agreement_anonymous_intro';
+        if ($this->user->isLoggedIn()) {
+            $title = 'usr_agreement';
+            $info = 'usr_agreement_footer_intro';
+        }
+        return (new PageContent($this->ui->txt($title), [$this->showDocument()]))->withOnScreenMessage('info', $this->ui->txt($info));
     }
 
     public function showAgreementForm(string $gui, string $cmd): PageFragment
     {
-        return (new PageContent($this->ui->txt('accept_usr_agreement'), [
+        $form = $this->user->matchingDocument()->isOk() ?
+              $this->agreementForm($gui, $cmd) :
+              $this->ui->create()->divider()->horizontal();
+
+        $content = (new PageContent($this->ui->txt('accept_usr_agreement'), [
             $this->showDocument(),
-            $this->agreementForm($gui, $cmd),
+            $form,
             $this->logoutLink(),
-        ]))->withOnScreenMessage('info', $this->ui->txt('accept_usr_agreement_intro'));
+        ]));
+
+        return $this->user->matchingDocument()->isOk() ?
+            $content->withOnScreenMessage('info', $this->ui->txt('accept_usr_agreement_intro')) :
+            $content;
     }
 
     public function needsToAgree(): bool
     {
         return !$this->user->cannotAgree()
-            && ($this->user->neverAgreed() || $this->user->didNotAcceptCurrentVersion());
+            && ($this->user->neverAgreed() || $this->user->needsToAcceptNewDocument());
     }
 
     private function showDocument(): Component

@@ -203,6 +203,7 @@ class ilObjUser extends ilObject
                 )
             ) {
                 //load default (css)
+                $this->prefs["skin"] = $this->ilias->ini->readVariable("layout", "skin");
                 $this->prefs["style"] = $this->ilias->ini->readVariable("layout", "style");
             }
 
@@ -1136,9 +1137,6 @@ class ilObjUser extends ilObject
         $q = "DELETE FROM bookmark_data WHERE user_id = " .
             $ilDB->quote($this->getId(), "integer");
         $ilDB->manipulate($q);
-
-        // DELETE FORUM ENTRIES (not complete in the moment)
-        ilObjForum::_deleteUser($this->getId());
 
         // Delete crs entries
         ilObjCourse::_deleteUser($this->getId());
@@ -2901,6 +2899,11 @@ class ilObjUser extends ilObject
         return self::$personal_image_cache[$this->getId()][$a_size][(int) $a_force_pic];
     }
 
+    public function hasProfilePicture(): bool
+    {
+        return (new ilUserAvatarResolver($this->getId()))->hasProfilePicture();
+    }
+
     public function getAvatar(): Avatar
     {
         return self::_getAvatar($this->getId());
@@ -2927,7 +2930,7 @@ class ilObjUser extends ilObject
         $define = new ilUserAvatarResolver($a_usr_id);
         $define->setForcePicture($a_force_pic);
         $define->setSize($a_size);
-        return ilWACSignedPath::signFile($define->getLegacyPictureURL());
+        return $define->getLegacyPictureURL();
     }
 
     public static function copyProfilePicturesToDirectory(

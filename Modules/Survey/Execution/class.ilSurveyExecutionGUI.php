@@ -557,7 +557,7 @@ class ilSurveyExecutionGUI
             } else {
                 $this->run_manager->setPreviewData(
                     $data["question_id"],
-                    $question->saveUserInput($this->raw_post_data, $this->getCurrentRunId(), true)
+                    $question->saveUserInput($this->raw_post_data, 0, true)
                 );
             }
             return 0;
@@ -611,7 +611,7 @@ class ilSurveyExecutionGUI
 
                 $this->gui->button(
                     $this->lng->txt("svy_mail_send_confirmation"),
-                    $this->ctrl->getLinkTarget($this, "mailUserResults")
+                    "mailUserResults"
                 )->submit()->toToolbar();
 
                 $has_button = true;

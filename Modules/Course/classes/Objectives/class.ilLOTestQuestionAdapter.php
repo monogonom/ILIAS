@@ -1,6 +1,4 @@
 <?php
-
-declare(strict_types=0);
 /**
  * This file is part of ILIAS, a powerful learning management system
  * published by ILIAS open source e-Learning e.V.
@@ -17,6 +15,8 @@ declare(strict_types=0);
  *
  *********************************************************************/
 
+declare(strict_types=0);
+
 /**
  * Test question filter
  * @author Stefan Meyer <smeyer.ilias@gmx.de>
@@ -25,6 +25,10 @@ class ilLOTestQuestionAdapter
 {
     protected ilLOSettings $settings;
     protected ilLOTestAssignments $assignments;
+
+    /**
+     * @var ilLOTestRun[]
+     */
     protected array $run = [];
     protected int $user_id = 0;
     protected int $container_id = 0;
@@ -381,7 +385,7 @@ class ilLOTestQuestionAdapter
                     ) ?
                         ilLOUserResults::STATUS_COMPLETED :
                         ilLOUserResults::STATUS_FAILED,
-                    (int) $res['percentage'],
+                    (float) $res['percentage'],
                     $old_result['limit_perc'],
                     $old_result['tries'],
                     $old_result['is_final']
@@ -453,7 +457,7 @@ class ilLOTestQuestionAdapter
                 $tst_run->addQuestion($qst_id);
                 $points += ilCourseObjectiveQuestion::_lookupMaximumPointsOfQuestion($qst_id);
             }
-            $tst_run->setMaxPoints($points);
+            $tst_run->setMaxPoints((int) $points);
         }
     }
 
@@ -470,7 +474,7 @@ class ilLOTestQuestionAdapter
                 $tst_run->addQuestion($id);
                 $points += ilCourseObjectiveQuestion::_lookupMaximumPointsOfQuestion($id);
             }
-            $tst_run->setMaxPoints($points);
+            $tst_run->setMaxPoints((int) $points);
         }
     }
 
@@ -498,7 +502,7 @@ class ilLOTestQuestionAdapter
                     $points += ilCourseObjectiveQuestion::_lookupMaximumPointsOfQuestion($qst);
                 }
             }
-            $tst_run->setMaxPoints($points);
+            $tst_run->setMaxPoints((int) $points);
         }
     }
 

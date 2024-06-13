@@ -18,9 +18,7 @@
 
 declare(strict_types=1);
 
-namespace ImportHandler\I\File\Path\Node;
-
-use XMLReader;
+namespace ILIAS\Export\ImportHandler\I\File\Path\Node;
 
 interface ilNodeInterface
 {

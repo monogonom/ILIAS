@@ -20,9 +20,13 @@ declare(strict_types=1);
 
 use ILIAS\UI\Factory as UIFactory;
 use ILIAS\UI\Renderer as UIRenderer;
+use ILIAS\Refinery\Factory as Refinery;
 use ILIAS\DI\LoggingServices;
+use ILIAS\Data\Factory as DataFactory;
 use ILIAS\Skill\Service\SkillService;
 use ILIAS\Test\InternalRequestService;
+use ILIAS\TestQuestionPool\QuestionInfoService;
+use ILIAS\HTTP\GlobalHttpState;
 
 /**
  * Class ilTestResultsGUI
@@ -56,6 +60,7 @@ class ilTestResultsGUI
         private ilCtrl $ctrl,
         private ilAccess $access,
         private ilDBInterface $db,
+        private Refinery $refinery,
         private ilObjUser $user,
         private ilLanguage $lng,
         private LoggingServices $logging_services,
@@ -67,7 +72,8 @@ class ilTestResultsGUI
         private UIRenderer $ui_renderer,
         private SkillService $skills_service,
         private InternalRequestService $testrequest,
-        private \ILIAS\TestQuestionPool\QuestionInfoService $questioninfo
+        private QuestionInfoService $questioninfo,
+        private GlobalHttpState $http
     ) {
     }
 
@@ -167,7 +173,9 @@ class ilTestResultsGUI
                     $this->ui_factory,
                     $this->ui_renderer,
                     new ilTestParticipantAccessFilterFactory($this->access),
-                    $this->testrequest
+                    $this->testrequest,
+                    $this->http,
+                    $this->refinery
                 );
                 $gui->setTestObj($this->getTestObj());
                 $gui->setQuestionSetConfig($this->getQuestionSetConfig());
@@ -240,7 +248,7 @@ class ilTestResultsGUI
             case 'iltestskillevaluationgui':
                 $this->getTestTabs()->activateSubTab(ilTestTabsManager::SUBTAB_ID_SKILL_RESULTS);
 
-                $questionList = new ilAssQuestionList($this->db, $this->lng, $this->component_repository);
+                $questionList = new ilAssQuestionList($this->db, $this->lng, $this->refinery, $this->component_repository);
                 $questionList->setParentObjId($this->getTestObj()->getId());
                 $questionList->setQuestionInstanceTypeFilter(ilAssQuestionList::QUESTION_INSTANCE_TYPE_DUPLICATES);
                 $questionList->load();
@@ -304,19 +312,26 @@ class ilTestResultsGUI
                 break;
 
             case ilObjTestSettingsResultSummary::SCORE_REPORTING_DATE:
-                $date = new ilDateTime($this->testObj->getReportingDate(), IL_CAL_TIMESTAMP);
+                $date = $this->getTestObj()->getScoreSettings()->getResultSummarySettings()->getReportingDate()
+                    ->setTimezone(new \DateTimeZone($this->user->getTimeZone()));
+                $date_format = $this->user->getDateFormat();
+                if ($this->user->getTimeFormat() === (string) ilCalendarSettings::TIME_FORMAT_12) {
+                    $format = (new DataFactory())->dateFormat()->withTime12($date_format)->toString();
+                } else {
+                    $format = (new DataFactory())->dateFormat()->withTime24($date_format)->toString();
+                }
 
                 if (!$this->testObj->hasAnyTestResult($this->getTestSession())) {
                     $message = sprintf(
                         $this->lng->txt('tst_res_tab_msg_res_after_date_no_res'),
-                        ilDatePresentation::formatDate($date)
+                        $date->format($format)
                     );
                     break;
                 }
 
                 $message = sprintf(
                     $this->lng->txt('tst_res_tab_msg_res_after_date'),
-                    ilDatePresentation::formatDate($date)
+                    $date->format($format)
                 );
                 break;
 

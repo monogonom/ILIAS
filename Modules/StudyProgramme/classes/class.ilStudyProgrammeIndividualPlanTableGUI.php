@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * This file is part of ILIAS, a powerful learning management system
  * published by ILIAS open source e-Learning e.V.
@@ -17,6 +15,8 @@ declare(strict_types=1);
  * https://github.com/ILIAS-eLearning
  *
  *********************************************************************/
+
+declare(strict_types=1);
 
 class ilStudyProgrammeIndividualPlanTableGUI extends ilTable2GUI
 {
@@ -164,25 +164,24 @@ class ilStudyProgrammeIndividualPlanTableGUI extends ilTable2GUI
         $prg->applyToSubTreeNodes(
             function ($node) use ($prg_id, $ass_id, $usr_id, &$plan, $prg) {
                 $progress = $this->assignment->getProgressForNode($node->getId());
-                $completion_by_id = $progress->getCompletionBy();
+                $completion_by = $progress->getCompletionBy();
 
-                if ($completion_by_id) {
-                    $completion_by = ilObjUser::_lookupLogin($completion_by_id);
-                    if (!$completion_by) {
-                        $type = ilObject::_lookupType($completion_by_id);
-                        if ($type === "crsr") {
-                            $completion_by = ilContainerReference::_lookupTitle($completion_by_id);
-                        } else {
-                            $completion_by = ilObject::_lookupTitle($completion_by_id);
-                        }
-                    }
+                if ($completion_by === ilPRGProgress::COMPLETED_BY_SUBNODES) {
+                    $successful_subnodes = array_filter(
+                        $progress->getSubnodes(),
+                        static fn(ilPRGProgress $pgs): bool => $pgs->isSuccessful()
+                    );
+                    $successful_subnode_ids = array_map(
+                        static fn(ilPRGProgress $pgs): int => $pgs->getNodeId(),
+                        $successful_subnodes
+                    );
+                    $out = array_map(
+                        fn(int $node_obj_id): string => ilStudyProgrammeUserTable::lookupTitle($node_obj_id),
+                        $successful_subnode_ids
+                    );
+                    $completion_by = implode(', ', $out);
                 } else {
-                    $completion_by = '';
-                    if ($progress->isSuccessful()) {
-                        if ($progress->getCompletionBy()) {
-                            $completion_by = ilStudyProgrammeUserTable::lookupTitle($progress->getCompletionBy());
-                        }
-                    }
+                    $completion_by = $progress->isSuccessful() ? ilStudyProgrammeUserTable::lookupTitle($completion_by) : '';
                 }
 
                 $programme = ilObjStudyProgramme::getInstanceByObjId($progress->getNodeId());
@@ -199,7 +198,7 @@ class ilStudyProgrammeIndividualPlanTableGUI extends ilTable2GUI
                     //draft/active/outdated
                     "program_status" => $programme->getStatus(),
                     "assignment_date" => $progress->getAssignmentDate()->format('d.m.Y'),
-                    "deadline" => $progress->getDeadline(),
+                    "deadline" => $progress->isSuccessful() ? null : $progress->getDeadline(),
                     "completion_date" => $progress->getCompletionDate() ? $progress->getCompletionDate()->format('d.m.Y') : ''
                 ];
             },

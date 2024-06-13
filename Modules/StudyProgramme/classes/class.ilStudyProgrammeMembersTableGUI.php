@@ -48,7 +48,7 @@ class ilStudyProgrammeMembersTableGUI extends ilTable2GUI
         string $parent_cmd = '',
         string $template_context = ''
     ) {
-        $this->setId("sp_member_list");
+        $this->setId("sp_member_list_" . $prg_obj_id);
         $this->prg_obj_id = $prg_obj_id;
         $this->prg_user_table = $prg_user_table;
         $this->custom_filter = $custom_filter;
@@ -192,10 +192,22 @@ class ilStudyProgrammeMembersTableGUI extends ilTable2GUI
                     break;
                 case "prg_completion_by":
                     $completion_by = $row->getCompletionBy();
-                    if ($completion_by_obj_id = $row->getCompletionByObjId()) {
-                        if (ilObject::_lookupType($completion_by_obj_id) === 'crsr') {
-                            $completion_by = $this->getCompletionLink($completion_by_obj_id, $completion_by);
+                    if ($completion_by_obj_ids = $row->getCompletionByObjIds()) {
+                        $out = [];
+                        foreach ($completion_by_obj_ids as $completion_by_obj_id) {
+                            $type = ilObject::_lookupType($completion_by_obj_id);
+                            if ($type === 'crsr') {
+                                $target_obj_id = ilContainerReference::_lookupTargetId($completion_by_obj_id);
+                                $out[] = $this->getCompletionLink($target_obj_id, $completion_by);
+                            } else {
+                                $target_obj_id = $completion_by_obj_id;
+                                $out[] = $this->getCompletionLink(
+                                    $target_obj_id,
+                                    ilStudyProgrammeUserTable::lookupTitle($completion_by_obj_id)
+                                );
+                            }
                         }
+                        $completion_by = implode(', ', $out);
                     }
                     $this->tpl->setVariable("COMPLETION_BY", $completion_by);
                     break;
@@ -228,8 +240,9 @@ class ilStudyProgrammeMembersTableGUI extends ilTable2GUI
                     $this->tpl->parseCurrentBlock();
                     break;
                 default:
+                    $value = $row->getUserInformation()->getUserData($column) ?? '';
                     $this->tpl->setCurrentBlock('udf');
-                    $this->tpl->setVariable("UDF", $row->getUserInformation()->getUserData($column));
+                    $this->tpl->setVariable("UDF", $value);
                     $this->tpl->parseCurrentBlock();
             }
         }
@@ -336,9 +349,11 @@ class ilStudyProgrammeMembersTableGUI extends ilTable2GUI
             'changeExpireDateMulti' => $this->lng->txt('prg_multi_change_expire_date'),
             'markAccreditedMulti' => $this->lng->txt('prg_multi_mark_accredited'),
             'unmarkAccreditedMulti' => $this->lng->txt('prg_multi_unmark_accredited'),
-            'updateCertificateMulti' => $this->lng->txt('prg_multi_update_certificate'),
-            'removeCertificateMulti' => $this->lng->txt('prg_multi_remove_certificate')
         ];
+        if($this->prg->isCertificateActive()) {
+            $permissions_for_edit_individual_plan['updateCertificateMulti'] = $this->lng->txt('prg_multi_update_certificate');
+            $permissions_for_edit_individual_plan['removeCertificateMulti'] = $this->lng->txt('prg_multi_remove_certificate');
+        }
 
         $permissions_for_manage = [
             'removeUserMulti' => $this->lng->txt('prg_multi_remove_user'),
@@ -399,8 +414,6 @@ class ilStudyProgrammeMembersTableGUI extends ilTable2GUI
         if ($is_root) {
             $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_SHOW_INDIVIDUAL_PLAN;
             $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_REMOVE_USER;
-            $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_UNMARK_RELEVANT;
-            $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_MARK_RELEVANT;
             $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_UPDATE_FROM_CURRENT_PLAN;
             $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_ACKNOWLEDGE_COURSES;
             $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_CHANGE_DEADLINE;
@@ -413,6 +426,24 @@ class ilStudyProgrammeMembersTableGUI extends ilTable2GUI
         if ($status == ilPRGProgress::STATUS_IN_PROGRESS) {
             $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_MARK_ACCREDITED;
         }
+
+        if (! $is_root &&
+            ($status == ilPRGProgress::STATUS_IN_PROGRESS ||
+            $status == ilPRGProgress::STATUS_ACCREDITED)
+        ) {
+            $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_UNMARK_RELEVANT;
+        }
+        if ($status == ilPRGProgress::STATUS_NOT_RELEVANT) {
+            $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_MARK_RELEVANT;
+        }
+        if ($status == ilPRGProgress::STATUS_COMPLETED ||
+            $status == ilPRGProgress::STATUS_ACCREDITED
+            && $this->prg->isCertificateActive()
+        ) {
+            $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_UPDATE_CERTIFICATE;
+            $actions[] = ilObjStudyProgrammeMembersGUI::ACTION_REMOVE_CERTIFICATE;
+        }
+
 
         return $actions;
     }
@@ -428,10 +459,9 @@ class ilStudyProgrammeMembersTableGUI extends ilTable2GUI
         return $valid_user_ids;
     }
 
-    protected function getCompletionLink(int $reference_obj_id, string $title): string
+    protected function getCompletionLink(int $target_obj_id, string $title): string
     {
         $link = $title;
-        $target_obj_id = ilContainerReference::_lookupTargetId($reference_obj_id);
         $ref_ids = ilObject::_getAllReferences($target_obj_id);
         foreach ($ref_ids as $ref_id) {
             if (!ilObject::_isInTrash($ref_id)) {

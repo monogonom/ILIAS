@@ -456,7 +456,7 @@ abstract class ilRemoteObjectBase extends ilObject2
                     $raw_value = $timePlace;
                 }
 
-                if ($adv_md_def->importFromECS($type, $raw_value, $id)) {
+                if ($adv_md_def->importFromECS((string) $type, (string) $raw_value, $id)) {
                     $do_save = true;
                 }
             }
@@ -671,7 +671,7 @@ abstract class ilRemoteObjectBase extends ilObject2
                 return $list->getResult()->getLinkIds();
             }
         } catch (ilECSConnectorException $exc) {
-            $this->logger->error(__METHOD__ . ': Error getting resource list. ' . $exc->getMessage());
+            $this->logger->error(__METHOD__ . ': Error getting resource list for type . ' . $this->getECSObjectType() . ' with message: ' . $exc->getMessage());
         }
 
         return [];

@@ -38,7 +38,7 @@ abstract class BaseDelivery
         protected \ILIAS\HTTP\Services $http,
         protected ResponseBuilder $response_builder
     ) {
-        if(is_readable(self::MIME_TYPE_MAP)) {
+        if (is_readable(self::MIME_TYPE_MAP)) {
             $map = include self::MIME_TYPE_MAP;
         }
         $this->mime_type_map = $map ?? [];
@@ -80,7 +80,6 @@ abstract class BaseDelivery
     ): ResponseInterface {
         $r = $r->withHeader('X-ILIAS-FileDelivery-Method', $this->response_builder->getName());
         $r = $r->withHeader(ResponseHeader::CONTENT_TYPE, $mime_type);
-
         $r = $r->withHeader(
             ResponseHeader::CONTENT_DISPOSITION,
             $disposition->value . '; filename="' . $file_name . '"'
@@ -90,14 +89,6 @@ abstract class BaseDelivery
             ResponseHeader::EXPIRES,
             date("D, j M Y H:i:s", strtotime('+5 days')) . " GMT"
         );
-        $r = $r->withHeader(ResponseHeader::ETAG, md5($uri));
-        try {
-            $r = $r->withHeader(
-                ResponseHeader::LAST_MODIFIED,
-                date("D, j M Y H:i:s", filemtime($uri) ?: time()) . " GMT"
-            );
-        } catch (\Throwable) {
-        }
 
         return $r;
     }

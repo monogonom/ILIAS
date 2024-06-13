@@ -61,14 +61,14 @@
 		"league/flysystem": "^3.0",
 		"james-heinrich/getid3": "^1.9.23",
 		"phpoffice/phpspreadsheet": "^1.29.0",
-		"jumbojett/openid-connect-php": "^0.9.5",
+		"jumbojett/openid-connect-php": "^1.0.0",
 		"sabre/dav": "^4.1",
 		"symfony/console" : "^5.0",
 		"slim/slim": "^3.11",
 		"ramsey/uuid": "4.4.0",
 		"enshrined/svg-sanitize": "^0.16.0",
 		"guzzlehttp/guzzle": "^7.0",
-		"simplesamlphp/simplesamlphp": "^1.19.8",
+		"simplesamlphp/simplesamlphp": "^2.0",
 		"seld/jsonlint": "^1.8",
 		"jasig/phpcas": "^1.4",
 		"league/commonmark": "^2.3",
@@ -535,9 +535,6 @@
 		"patches": {
 			"phpmailer/phpmailer": {
 				"ILIAS PhpMailer Patches": "./libs/composer/patches/phpmailer.patch"
-			},
-			"simplesamlphp/simplesamlphp": {
-				"ILIAS SimpleSAMLphp Patches": "./libs/composer/patches/simplesamlphp.patch"
 			},
 			"imsglobal/lti": {
 				"ILIAS LTI Patches": "./libs/composer/patches/lti.patch"

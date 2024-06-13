@@ -18,10 +18,7 @@
 
 declare(strict_types=1);
 
-use ILIAS\HTTP\Services as HTTPServices;
-use ILIAS\GlobalScreen\Services as GSServices;
 use ILIAS\Filesystem\Stream\Streams;
-use ILIAS\DI\LoggingServices;
 
 /**
  * Output class for assessment test evaluation
@@ -94,54 +91,12 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
                     $ret = $this->exportEvaluation($cmd);
                 } elseif (in_array($cmd, ['excel_all_test_runs_a', 'csv_a'])) {
                     $ret = $this->exportAggregatedResults($cmd);
-                } elseif ($cmd === 'certificate') {
-                    $ret = $this->exportCertificate();
                 } else {
                     $ret = $this->$cmd();
                 }
                 break;
         }
         return $ret;
-    }
-
-    public function &getHeaderNames(): array
-    {
-        $headernames = [];
-        if ($this->object->getAnonymity()) {
-            array_push($headernames, $this->lng->txt("counter"));
-        } else {
-            array_push($headernames, $this->lng->txt("name"));
-            array_push($headernames, $this->lng->txt("login"));
-        }
-        $additionalFields = $this->object->getEvaluationAdditionalFields();
-        if (count($additionalFields)) {
-            foreach ($additionalFields as $fieldname) {
-                array_push($headernames, $this->lng->txt($fieldname));
-            }
-        }
-        array_push($headernames, $this->lng->txt("tst_reached_points"));
-        array_push($headernames, $this->lng->txt("tst_mark"));
-        array_push($headernames, $this->lng->txt("tst_answered_questions"));
-        array_push($headernames, $this->lng->txt("working_time"));
-        array_push($headernames, $this->lng->txt("detailed_evaluation"));
-        return $headernames;
-    }
-
-    public function &getHeaderVars(): array
-    {
-        $headervars = [];
-        if ($this->object->getAnonymity()) {
-            array_push($headervars, "counter");
-        } else {
-            array_push($headervars, "name");
-            array_push($headervars, "login");
-        }
-        array_push($headervars, "resultspoints");
-        array_push($headervars, "resultsmarks");
-        array_push($headervars, "qworkedthrough");
-        array_push($headervars, "timeofwork");
-        array_push($headervars, "");
-        return $headervars;
     }
 
     /**
@@ -172,7 +127,10 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         $this->ctrl->redirect($this, "outEvaluation");
     }
 
-    public function outEvaluation()
+    /**
+     * @param list<\ILIAS\UI\Component\Component>|null $prior_components And array of components to be rendered before the content
+     */
+    public function outEvaluation(?array $prior_components = null): void
     {
         $ilToolbar = $this->toolbar;
 
@@ -210,7 +168,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
         $eval = new ilTestEvaluationData($this->db, $this->object);
         $eval->setFilterArray($filter_array);
-        $foundParticipants = $eval->getParticipants();
+        $found_participants = $eval->getParticipants();
 
         $participantData = new ilTestParticipantData($this->db, $this->lng);
         $participantData->setActiveIdsFilter($eval->getParticipantIds());
@@ -224,12 +182,12 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         $counter = 1;
         if (count($participantData->getActiveIds()) > 0) {
             foreach ($participantData->getActiveIds() as $active_id) {
-                if (!isset($foundParticipants[$active_id]) || !($foundParticipants[$active_id] instanceof ilTestEvaluationUserData)) {
+                if (!isset($found_participants[$active_id]) || !($found_participants[$active_id] instanceof ilTestEvaluationUserData)) {
                     continue;
                 }
 
-                /* @var $userdata ilTestEvaluationUserData */
-                $userdata = $foundParticipants[$active_id];
+                /** @var ilTestEvaluationUserData $userdata */
+                $userdata = $found_participants[$active_id];
 
                 $remove = false;
                 if ($passedonly) {
@@ -303,14 +261,14 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
             $export_type = new ilSelectInputGUI($this->lng->txt('exp_eval_data'), 'export_type');
             if ($this->getObject() && $this->getObject()->getQuestionSetType() !== ilObjTest::QUESTION_SET_TYPE_RANDOM) {
                 $options = array(
-                    $this->ui_factory->button()->shy($this->lng->txt('exp_type_excel') . ' (' . $this->lng->txt('exp_scored_test_run') . ')', $this->ctrl->getLinkTarget($this, 'excel_scored_test_run')),
-                    $this->ui_factory->button()->shy($this->lng->txt('exp_type_excel') . ' (' . $this->lng->txt('exp_all_test_runs') . ')', $this->ctrl->getLinkTarget($this, 'excel_all_test_runs')),
-                    $this->ui_factory->button()->shy($this->lng->txt('exp_type_spss'), $this->ctrl->getLinkTarget($this, 'csv'))
+                    $this->ui_factory->button()->shy($this->lng->txt('exp_grammar_as') . ' ' . $this->lng->txt('exp_type_excel') . ' (' . $this->lng->txt('exp_scored_test_run') . ')', $this->ctrl->getLinkTarget($this, 'excel_scored_test_run')),
+                    $this->ui_factory->button()->shy($this->lng->txt('exp_grammar_as') . ' ' . $this->lng->txt('exp_type_excel') . ' (' . $this->lng->txt('exp_all_test_runs') . ')', $this->ctrl->getLinkTarget($this, 'excel_all_test_runs')),
+                    $this->ui_factory->button()->shy($this->lng->txt('exp_grammar_as') . ' ' . $this->lng->txt('exp_type_spss'), $this->ctrl->getLinkTarget($this, 'csv'))
                 );
             } else {
                 $options = array(
-                    $this->ui_factory->button()->shy($this->lng->txt('exp_type_excel') . ' (' . $this->lng->txt('exp_all_test_runs') . ')', $this->ctrl->getLinkTarget($this, 'excel_all_test_runs')),
-                    $this->ui_factory->button()->shy($this->lng->txt('exp_type_spss'), $this->ctrl->getLinkTarget($this, 'csv'))
+                    $this->ui_factory->button()->shy($this->lng->txt('exp_grammar_as') . ' ' . $this->lng->txt('exp_type_excel') . ' (' . $this->lng->txt('exp_all_test_runs') . ')', $this->ctrl->getLinkTarget($this, 'excel_all_test_runs')),
+                    $this->ui_factory->button()->shy($this->lng->txt('exp_grammar_as') . ' ' . $this->lng->txt('exp_type_spss'), $this->ctrl->getLinkTarget($this, 'csv'))
                 );
             }
 
@@ -318,7 +276,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
                 try {
                     $globalCertificatePrerequisites = new ilCertificateActiveValidator();
                     if ($globalCertificatePrerequisites->validate()) {
-                        $options[] = $this->ui_factory->button()->shy($this->lng->txt('exp_type_certificate'), $this->ctrl->getLinkTarget($this, 'certificate'));
+                        $options[] = $this->ui_factory->button()->shy($this->lng->txt('exp_grammar_as') . ' ' . $this->lng->txt('exp_type_certificate'), $this->ctrl->getLinkTarget($this, 'exportCertificateArchive'));
                     }
                 } catch (ilException $e) {
                 }
@@ -329,7 +287,13 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         }
 
         $this->setCss();
-        $this->tpl->setContent($table_gui->getHTML());
+
+        $this->tpl->setContent($this->ui_renderer->render(
+            array_filter(array_merge(
+                $prior_components ?? [],
+                [$this->ui_factory->legacy($table_gui->getHTML())]
+            ))
+        ));
     }
 
     public function detailedEvaluation()
@@ -556,8 +520,8 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
         $eval = $this->object->getCompleteEvaluationData();
         $data = [];
-        $foundParticipants = $eval->getParticipants();
-        if (count($foundParticipants)) {
+        $found_participants = $eval->getParticipants();
+        if (count($found_participants)) {
             $options = [
                 $this->ui_factory->button()->shy($this->lng->txt('exp_type_excel'), $this->ctrl->getLinkTarget($this, 'excel_all_test_runs_a')),
                 $this->ui_factory->button()->shy($this->lng->txt('exp_type_spss'), $this->ctrl->getLinkTarget($this, 'csv_a'))
@@ -568,7 +532,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
             $data[] = array(
                 'result' => $this->lng->txt("tst_eval_total_persons"),
-                'value' => count($foundParticipants)
+                'value' => count($found_participants)
             );
             $total_finished = $eval->getTotalFinishedParticipants();
             $data[] = array(
@@ -591,7 +555,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
             $total_passed_reached = 0;
             $total_passed_max = 0;
             $total_passed_time = 0;
-            foreach ($foundParticipants as $userdata) {
+            foreach ($found_participants as $userdata) {
                 if ($userdata->getPassed()) {
                     $total_passed++;
                     $total_passed_reached += $userdata->getReached();
@@ -632,7 +596,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
             $answered = 0;
             $reached = 0;
             $max = 0;
-            foreach ($foundParticipants as $userdata) {
+            foreach ($found_participants as $userdata) {
                 for ($i = 0; $i <= $userdata->getLastPass(); $i++) {
                     if (is_object($userdata->getPass($i))) {
                         $question = $userdata->getPass($i)->getAnsweredQuestionByQuestionId($question_id);
@@ -717,7 +681,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
                 if (strlen($filtertext)) {
                     $this->ctrl->setParameterByClass("iltestcertificategui", "g_userfilter", $filtertext);
                 }
-                $this->ctrl->redirect($this, "exportCertificate");
+                $this->ctrl->redirect($this, "exportCertificateArchive");
                 break;
         }
     }
@@ -738,11 +702,11 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         }
     }
 
-    public function exportCertificate()
+    public function exportCertificateArchive(): void
     {
         $globalCertificatePrerequisites = new ilCertificateActiveValidator();
         if (!$globalCertificatePrerequisites->validate()) {
-            $this->er->raiseError($this->lng->txt('permission_denied'), $this->error->MESSAGE);
+            $this->error->raiseError($this->lng->txt('permission_denied'), $this->error->MESSAGE);
         }
 
         $database = $this->db;
@@ -765,38 +729,116 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         $pdfGenerator = new ilPdfGenerator($ilUserCertificateRepository);
 
         $total_users = $this->object->evalTotalPersonsArray();
-        if (count($total_users)) {
-            $certValidator = new ilCertificateDownloadValidator();
+        if (count($total_users) === 0) {
+            $this->outEvaluation([
+                $this->ui_factory->messageBox()->info(
+                    $this->lng->txt('export_cert_no_users')
+                )
+            ]);
+            return;
+        }
 
-            foreach ($total_users as $active_id => $name) {
-                $user_id = $this->object->_getUserIdFromActiveId($active_id);
+        $certValidator = new ilCertificateDownloadValidator();
 
-                if (!$certValidator->isCertificateDownloadable($user_id, $objectId)) {
-                    continue;
-                }
+        $num_pdfs = 0;
+        $ignored_usr_ids = [];
+        $failed_pdf_generation_usr_ids = [];
+        foreach ($total_users as $active_id => $name) {
+            $user_id = ilObjTest::_getUserIdFromActiveId($active_id);
 
-                $pdfAction = new ilCertificatePdfAction(
-                    $pdfGenerator,
-                    new ilCertificateUtilHelper(),
-                    $this->lng->txt('error_creating_certificate_pdf')
+            if (!$certValidator->isCertificateDownloadable($user_id, $objectId)) {
+                $this->logging_services->root()->debug(
+                    sprintf(
+                        'No certificate available for user %s in test %s ' .
+                        '(Check if: ilServer is enabled / Certificates are enabled globally / ' .
+                        'A Certificate is issued for the user)',
+                        $user_id,
+                        $objectId
+                    )
                 );
-
-                $pdf = $pdfAction->createPDF($user_id, $objectId);
-                if (strlen($pdf)) {
-                    $zipAction->addPDFtoArchiveDirectory($pdf, $archive_dir, $user_id . "_" . str_replace(
-                        " ",
-                        "_",
-                        ilFileUtils::getASCIIFilename($name)
-                    ) . ".pdf");
-                }
+                $ignored_usr_ids[] = $user_id;
+                continue;
             }
-            try {
-                $zipAction->zipCertificatesInArchiveDirectory($archive_dir, true);
-            } catch(\ILIAS\Filesystem\Exception\IOException $e) {
-                $this->tpl->setOnScreenMessage(ilGlobalTemplateInterface::MESSAGE_TYPE_FAILURE, $this->lng->txt('error_creating_certificate_zip_empty'), true);
-                $this->ctrl->redirect($this, 'outEvaluation');
+
+            $pdfAction = new ilCertificatePdfAction(
+                $pdfGenerator,
+                new ilCertificateUtilHelper(),
+                $this->lng->txt('error_creating_certificate_pdf')
+            );
+
+            $pdf = $pdfAction->createPDF($user_id, $objectId);
+            if ($pdf !== '') {
+                $zipAction->addPDFtoArchiveDirectory($pdf, $archive_dir, $user_id . "_" . str_replace(
+                    " ",
+                    "_",
+                    ilFileUtils::getASCIIFilename($name)
+                ) . ".pdf");
+                ++$num_pdfs;
+            } else {
+                $this->logging_services->root()->error(
+                    sprintf(
+                        'The certificate service could not create a PDF for user %s and test %s',
+                        $user_id,
+                        $objectId
+                    )
+                );
+                $failed_pdf_generation_usr_ids[] = $user_id;
             }
         }
+
+        $components = [];
+
+        if ($num_pdfs > 0) {
+            try {
+                $zipAction->zipCertificatesInArchiveDirectory($archive_dir, true);
+            } catch (\ILIAS\Filesystem\Exception\IOException $e) {
+                $this->logging_services->root()->error($e->getMessage());
+                $this->logging_services->root()->error($e->getTraceAsString());
+                $components[] = $this->ui_factory->messageBox()->failure(
+                    $this->lng->txt('error_creating_certificate_zip_empty')
+                );
+            }
+        }
+
+        if ($ignored_usr_ids !== []) {
+            $user_logins = array_map(
+                static fn($usr_id): string => ilObjUser::_lookupLogin((int) $usr_id),
+                $ignored_usr_ids
+            );
+            if (count($ignored_usr_ids) === 1) {
+                $components[] = $this->ui_factory->messageBox()->info(sprintf(
+                    $this->lng->txt('export_cert_ignored_for_users_s'),
+                    implode(', ', $user_logins)
+                ));
+            } else {
+                $components[] = $this->ui_factory->messageBox()->info(sprintf(
+                    $this->lng->txt('export_cert_ignored_for_users_p'),
+                    count($ignored_usr_ids),
+                    implode(', ', $user_logins)
+                ));
+            }
+        }
+
+        if ($failed_pdf_generation_usr_ids !== []) {
+            $user_logins = array_map(
+                static fn($usr_id): string => ilObjUser::_lookupLogin((int) $usr_id),
+                $failed_pdf_generation_usr_ids
+            );
+            if (count($failed_pdf_generation_usr_ids) === 1) {
+                $components[] = $this->ui_factory->messageBox()->info(sprintf(
+                    $this->lng->txt('export_cert_failed_for_users_s'),
+                    implode(', ', $user_logins)
+                ));
+            } else {
+                $components[] = $this->ui_factory->messageBox()->info(sprintf(
+                    $this->lng->txt('export_cert_failed_for_users_p'),
+                    count($ignored_usr_ids),
+                    implode(', ', $user_logins)
+                ));
+            }
+        }
+
+        $this->outEvaluation($components);
     }
 
     /**
@@ -894,12 +936,6 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
             $template->parseCurrentBlock();
         }
 
-        $title = sprintf(
-            $this->lng->txt("tst_result_user_name_pass"),
-            $pass + 1,
-            ilObjUser::_lookupFullname($this->object->_getUserIdFromActiveId($active_id))
-        );
-
         $pass_results = $this->results_factory->getPassResultsFor(
             $this->object,
             $active_id,
@@ -909,7 +945,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
         $table = $this->results_presentation_factory->getPassResultsPresentationTable(
             $pass_results,
-            $title
+            $this->buildResultsTitle($active_id, $pass)
         );
 
         $this->setCss();
@@ -955,18 +991,12 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         $anchors = [];
 
         foreach($show_user_results as $selected_user) {
-            $active_id = (int)$selected_user;
+            $active_id = (int) $selected_user;
             $pass = ilObjTest::_getResultPass($active_id);
 
             $template = new ilTemplate("tpl.il_as_tst_pass_details_overview_participants.html", true, true, "Modules/Test");
             $this->populateExamId($template, $active_id, (int) $pass);
             $this->populatePassFinishDate($template, ilObjTest::lookupLastTestPassAccess($active_id, $pass));
-
-            $title = sprintf(
-                $this->lng->txt("tst_result_user_name_pass"),
-                $pass + 1,
-                ilObjUser::_lookupFullname($this->object->_getUserIdFromActiveId($active_id))
-            );
 
             $pass_results = $this->results_factory->getPassResultsFor(
                 $this->object,
@@ -977,7 +1007,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
             $table = $this->results_presentation_factory->getPassResultsPresentationTable(
                 $pass_results,
-                $title
+                $this->buildResultsTitle($active_id, $pass)
             );
 
             $anchor = '<a name="participant_active_' . $active_id . '"></a>';
@@ -1178,7 +1208,9 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         }
 
         $data = $this->object->getCompleteEvaluationData();
-        $percent = $data->getParticipant($active_id)->getPass($pass)->getReachedPoints() / $data->getParticipant($active_id)->getPass($pass)->getMaxPoints() * 100;
+        $reached = $data->getParticipant($active_id)->getPass($pass)->getReachedPoints();
+        $max = $data->getParticipant($active_id)->getPass($pass)->getMaxPoints();
+        $percent = $max ? $reached / $max * 100.0 : 0;
         $result = $data->getParticipant($active_id)->getPass($pass)->getReachedPoints() . " " . strtolower($this->lng->txt("of")) . " " . $data->getParticipant($active_id)->getPass($pass)->getMaxPoints() . " (" . sprintf("%2.2f", $percent) . " %" . ")";
         $tpl->setCurrentBlock('total_score');
         $tpl->setVariable("TOTAL_RESULT_TEXT", $this->lng->txt('tst_stat_result_resultspoints'));
@@ -1193,12 +1225,6 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
         $this->setCss();
 
-        $title = sprintf(
-            $this->lng->txt("tst_result_user_name_pass"),
-            $pass + 1,
-            ilObjUser::_lookupFullname($this->object->_getUserIdFromActiveId($active_id))
-        );
-
         $pass_results = $this->results_factory->getPassResultsFor(
             $this->object,
             $active_id,
@@ -1208,7 +1234,7 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
         $table = $this->results_presentation_factory->getPassResultsPresentationTable(
             $pass_results,
-            $title
+            $this->buildResultsTitle($active_id, $pass)
         );
 
         $tpl->setVariable("LIST_OF_ANSWERS", $table->render());
@@ -1441,55 +1467,49 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         $color_class = array("tblrow1", "tblrow2");
         $counter = 0;
         $this->tpl->addBlockFile("ADM_CONTENT", "adm_content", "tpl.il_as_tst_eval_single_answers.html", "Modules/Test");
-        $foundParticipants = $data->getParticipants();
-        if (count($foundParticipants) == 0) {
+        $found_participants = $data->getParticipants();
+        if ($found_participants === []) {
             $this->tpl->setOnScreenMessage('info', $this->lng->txt("tst_no_evaluation_data"));
             return;
-        } else {
-            $rows = [];
-            foreach ($data->getQuestionTitles() as $question_id => $question_title) {
-                $answered = 0;
-                $reached = 0;
-                $max = 0;
-                foreach ($foundParticipants as $userdata) {
-                    $pass = $userdata->getScoredPass();
-                    if (is_object($userdata->getPass($pass))) {
-                        $question = $userdata->getPass($pass)->getAnsweredQuestionByQuestionId($question_id);
-                        if (is_array($question)) {
-                            $answered++;
-                        }
-                    }
-                }
-                $counter++;
-                $this->ctrl->setParameter($this, "qid", $question_id);
-                $question_object = assQuestion::instantiateQuestion($question_id);
-                $download = "";
-                if ($question_object instanceof ilObjFileHandlingQuestionType) {
-                    if ($question_object->hasFileUploads($this->object->getTestId())) {
-                        $download = "<a href=\"" . $this->ctrl->getLinkTarget($this, "exportFileUploadsForAllParticipants") . "\">" . $this->lng->txt("download") . "</a>";
-                    }
-                }
-                array_push(
-                    $rows,
-                    array(
-                        'qid' => $question_id,
-                        'question_title' => $question_title,
-                        'number_of_answers' => $answered,
-                        'output' => "<a target='_blank' href=\"" . $this->ctrl->getLinkTarget($this, "exportQuestionForAllParticipants") . "\">" . $this->lng->txt("print") . "</a>",
-                        'file_uploads' => $download
-                    )
-                );
-            }
-            if (count($rows)) {
-                $table_gui = new ilResultsByQuestionTableGUI($this, "singleResults");
-                $table_gui->setTitle($this->lng->txt("tst_answered_questions_test"));
-                $table_gui->setData($rows);
-
-                $this->tpl->setVariable("TBL_SINGLE_ANSWERS", $table_gui->getHTML());
-            } else {
-                $this->tpl->setVariable("TBL_SINGLE_ANSWERS", $this->lng->txt("adm_no_special_users"));
-            }
         }
+
+        $rows = [];
+        foreach ($data->getQuestionTitles() as $question_id => $question_title) {
+            $answered = 0;
+            $reached = 0;
+            $max = 0;
+            foreach ($found_participants as $userdata) {
+                $pass = $userdata->getScoredPass();
+                if (is_object($userdata->getPass($pass))) {
+                    $question = $userdata->getPass($pass)->getAnsweredQuestionByQuestionId($question_id);
+                    if (is_array($question)) {
+                        $answered++;
+                    }
+                }
+            }
+            $counter++;
+            $this->ctrl->setParameter($this, "qid", $question_id);
+            $question_object = assQuestion::instantiateQuestion($question_id);
+            $download = '';
+            if ($question_object instanceof ilObjFileHandlingQuestionType
+                && $question_object->hasFileUploads($this->object->getTestId())) {
+                $download = '<a href="' . $this->ctrl->getLinkTarget($this, "exportFileUploadsForAllParticipants") . '">'
+                    . $this->lng->txt('download') . '</a>';
+            }
+            $rows[] = [
+                'qid' => $question_id,
+                'question_title' => $question_title,
+                'number_of_answers' => $answered,
+                'output' => "<a target='_blank' href=\"" . $this->ctrl->getLinkTarget($this, "exportQuestionForAllParticipants") . "\">" . $this->lng->txt("print") . "</a>",
+                'file_uploads' => $download
+            ];
+        }
+
+        $table_gui = new ilResultsByQuestionTableGUI($this, 'singleResults');
+        $table_gui->setTitle($this->lng->txt('tst_answered_questions_test'));
+        $table_gui->setData($rows);
+
+        $this->tpl->setVariable('TBL_SINGLE_ANSWERS', $table_gui->getHTML());
     }
 
     public function outCertificate()
@@ -1786,11 +1806,10 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
 
         $table_gui = $this->buildPassDetailsOverviewTableGUI($this, 'outUserPassDetails');
 
-        $questionList = new ilAssQuestionList($ilDB, $this->lng, $component_repository);
+        $questionList = new ilAssQuestionList($ilDB, $this->lng, $this->refinery, $component_repository);
         $questionList->setParentObjId($this->object->getId());
         $questionList->setParentObjectType($this->object->getType());
         $questionList->setIncludeQuestionIdsFilter($questionIds);
-        $questionList->setQuestionInstanceTypeFilter(null);
 
         foreach ($table_gui->getFilterItems() as $item) {
             if (substr($item->getPostVar(), 0, strlen('tax_')) == 'tax_') {
@@ -1840,6 +1859,14 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
             $this->redirectBackToParticipantsScreen();
         }
 
+        $testSession = new ilTestSession();
+        $testSession->loadFromDb($active_id);
+
+        if ($testSession->isSubmitted()) {
+            $this->tpl->setOnScreenMessage('failure', $this->lng->txt('tst_already_submitted'), true);
+            $this->redirectBackToParticipantsScreen();
+        }
+
         if (($this->object->isEndingTimeEnabled() || $this->object->getEnableProcessingTime())
             && !$this->object->endingTimeReached()
             && !$this->object->isMaxProcessingTimeReached(
@@ -1875,21 +1902,27 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         $participant_data->setParticipantAccessFilter($access_filter);
         $participant_data->load($this->object->getTestId());
 
-        if (in_array($active_id, $participant_data->getActiveIds())) {
-            $testSession = new ilTestSession($this->db, $this->user);
-            $testSession->loadFromDb($active_id);
-
-            $this->object->updateTestPassResults(
-                $active_id,
-                $testSession->getPass(),
-                $this->object->areObligationsEnabled(),
-                null,
-                $this->object->getId()
-            );
-
-            $this->finishTestPass($active_id, $this->object->getId());
+        if (!in_array($active_id, $participant_data->getActiveIds())) {
+            $this->redirectBackToParticipantsScreen();
         }
 
+        $test_session = new ilTestSession($this->db, $this->user);
+        $test_session->loadFromDb($active_id);
+
+        if ($test_session->isSubmitted()) {
+            $this->tpl->setOnScreenMessage('failure', $this->lng->txt('tst_already_submitted'), true);
+            $this->redirectBackToParticipantsScreen();
+        }
+
+        $this->object->updateTestPassResults(
+            $active_id,
+            $test_session->getPass(),
+            $this->object->areObligationsEnabled(),
+            null,
+            $this->object->getId()
+        );
+
+        $this->finishTestPass($active_id, $this->object->getId());
 
         $this->redirectBackToParticipantsScreen();
     }
@@ -2025,5 +2058,21 @@ class ilTestEvaluationGUI extends ilTestServiceGUI
         ));
         $this->http->sendResponse();
         $this->http->close();
+    }
+
+    protected function buildResultsTitle(int $active_id, int $pass): string
+    {
+        if ($this->object->getAnonymity()) {
+            return sprintf(
+                $this->lng->txt("tst_eval_results_by_pass_lo"),
+                $pass + 1
+            );
+        } else {
+            return sprintf(
+                $this->lng->txt("tst_result_user_name_pass"),
+                $pass + 1,
+                ilObjUser::_lookupFullname($this->object->_getUserIdFromActiveId($active_id))
+            );
+        }
     }
 }

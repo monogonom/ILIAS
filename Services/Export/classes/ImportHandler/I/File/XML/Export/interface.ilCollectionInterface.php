@@ -18,11 +18,11 @@
 
 declare(strict_types=1);
 
-namespace ImportHandler\I\File\XML\Export;
+namespace ILIAS\Export\ImportHandler\I\File\XML\Export;
 
-use ImportHandler\I\File\XML\Export\ilHandlerInterface as ilXMLExportFileHandlerInterface;
-use Iterator;
 use Countable;
+use ILIAS\Export\ImportHandler\I\File\XML\Export\ilHandlerInterface as ilXMLExportFileHandlerInterface;
+use Iterator;
 
 interface ilCollectionInterface extends Iterator, Countable
 {

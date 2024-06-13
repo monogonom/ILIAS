@@ -60,7 +60,8 @@ class ilPollContentRenderer
         ilTemplate $tpl,
         int $ref_id,
         int $user_id,
-        ilObjPoll $poll
+        ilObjPoll $poll,
+        bool $admin_view = false
     ): void {
         $this->renderAnchor($tpl, $poll->getId());
         $this->renderAvailability($tpl, $poll);
@@ -80,15 +81,17 @@ class ilPollContentRenderer
                 $poll->getQuestion(),
                 $poll->getImageFullPath()
             );
-            $this->renderAnswersAndResults($tpl, $poll, $user_id);
-        }
-
-        if ($this->state->isUserAnonymous($user_id)) {
-            $this->renderAlertForAnonymousUser($tpl);
+            if (!$admin_view) {
+                $this->renderAnswersAndResults($tpl, $poll, $user_id);
+            }
         }
 
         if ($poll->getShowComments()) {
             $this->renderComments($tpl, $ref_id);
+        }
+
+        if ($this->state->isUserAnonymous($user_id)) {
+            $this->renderAlertForAnonymousUser($tpl);
         }
     }
 
@@ -216,7 +219,10 @@ class ilPollContentRenderer
         string $text,
         ?string $img_path
     ): void {
-        $tpl->setVariable("TXT_QUESTION", nl2br(trim($text)));
+        $tpl->setVariable(
+            "TXT_QUESTION",
+            $this->specialCharsAsEntities(nl2br(trim($text)))
+        );
         if ($img_path) {
             $tpl->setVariable(
                 "URL_IMAGE",
@@ -297,7 +303,10 @@ class ilPollContentRenderer
     ): void {
         $description = trim($description);
         if ($description) {
-            $tpl->setVariable("TXT_DESC", nl2br($description));
+            $tpl->setVariable(
+                "TXT_DESC",
+                $this->specialCharsAsEntities(nl2br($description))
+            );
         }
     }
 
@@ -339,6 +348,16 @@ class ilPollContentRenderer
     {
         return ilDatePresentation::formatDate(
             new ilDateTime($date, IL_CAL_UNIX)
+        );
+    }
+
+    protected function specialCharsAsEntities(string $string): string
+    {
+        // Should be replaced by a proper refinery transformation once https://github.com/ILIAS-eLearning/ILIAS/pull/6314 is merged
+        return  htmlspecialchars(
+            $string,
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'utf-8'
         );
     }
 }

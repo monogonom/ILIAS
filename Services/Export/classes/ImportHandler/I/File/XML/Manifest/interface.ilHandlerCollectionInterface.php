@@ -18,14 +18,13 @@
 
 declare(strict_types=1);
 
-namespace ImportHandler\I\File\XML\Manifest;
+namespace ILIAS\Export\ImportHandler\I\File\XML\Manifest;
 
-use ImportHandler\File\XML\Manifest\ilExportObjectType;
-use ImportHandler\I\File\XML\Manifest\ilHandlerInterface as ilManifestXMLFileHandlerInterface;
-use ImportStatus\I\ilCollectionInterface as ilImportStatusHandlerCollectionInterface;
-use ImportHandler\I\File\XML\ilCollectionInterface as ilXMLFileHandlerCollectionInterface;
-use Iterator;
 use Countable;
+use ILIAS\Export\ImportHandler\File\XML\Manifest\ilExportObjectType;
+use ILIAS\Export\ImportHandler\I\File\XML\Manifest\ilHandlerInterface as ilManifestXMLFileHandlerInterface;
+use ILIAS\Export\ImportStatus\I\ilCollectionInterface as ilImportStatusHandlerCollectionInterface;
+use Iterator;
 
 interface ilHandlerCollectionInterface extends Iterator, Countable
 {

@@ -70,7 +70,7 @@ class ilPublicUserProfileGUI implements ilCtrlBaseClassInterface
 
         $this->ctrl->saveParameter($this, ['user_id','back_url', 'user']);
         $back_url = $this->profile_request->getBackUrl();
-        if ($back_url != '') {
+        if ($back_url !== '') {
             $this->setBackUrl($back_url);
         }
 
@@ -103,47 +103,21 @@ class ilPublicUserProfileGUI implements ilCtrlBaseClassInterface
     /**
      * Set Back Link URL.
      */
-    public function setBackUrl(string $a_backurl): void
+    public function setBackUrl(string $backurl): void
     {
         // we only allow relative links
-        $parts = parse_url($a_backurl);
+        $parts = parse_url($backurl);
         $host = $parts['host'] ?? '';
         if ($host !== '') {
-            $a_backurl = '#';
+            $backurl = '#';
         }
-        $this->backurl = $a_backurl;
-        $this->ctrl->setParameter($this, 'back_url', rawurlencode($a_backurl));
+        $this->backurl = $backurl;
+        $this->ctrl->setParameter($this, 'back_url', rawurlencode($backurl));
     }
 
     public function getBackUrl(): string
     {
         return $this->backurl;
-    }
-
-    protected function handleBackUrl(bool $a_is_portfolio = false): void
-    {
-        $back_url = $this->profile_request->getBackUrl();
-        $back = ($this->getBackUrl() != '')
-            ? $this->getBackUrl()
-            : $back_url;
-
-        if (!$back) {
-            if ($this->current_user->getId() != ANONYMOUS_USER_ID) {
-                // #15984
-                $back = 'ilias.php?baseClass=ilDashboardGUI';
-            } else {
-                $back = 'ilias.php?baseClass=ilRepositoryGUI';
-            }
-        }
-
-        if (!$a_is_portfolio) {
-            // #17838
-            $this->tabs->clearTargets();
-            $this->tabs->setBackTarget(
-                $this->lng->txt('back'),
-                $back
-            );
-        }
     }
 
     /**
@@ -187,7 +161,6 @@ class ilPublicUserProfileGUI implements ilCtrlBaseClassInterface
             case 'ilobjportfoliogui':
                 $portfolio_id = $this->getProfilePortfolio();
                 if ($portfolio_id) {
-                    $this->handleBackUrl(true);
                     $gui = new ilObjPortfolioGUI($portfolio_id); // #11876
                     $gui->setAdditional($this->getAdditional());
                     $gui->setPermaLink($this->getUserId(), 'usr');
@@ -372,25 +345,9 @@ class ilPublicUserProfileGUI implements ilCtrlBaseClassInterface
             $tpl->setVariable('HREF_VCARD', $this->ctrl->getLinkTarget($this, 'deliverVCard'));
         }
 
-        $webspace_dir = ilFileUtils::getWebspaceDir('user');
-        $check_dir = ilFileUtils::getWebspaceDir();
-        $random = new \ilRandom();
-        $imagefile = $webspace_dir . '/usr_images/' . $user->getPref('profile_image') . '?dummy=' . $random->int(1, 999999);
-        $check_file = $check_dir . '/usr_images/' . $user->getPref('profile_image');
-
-        if (!is_file($check_file)) {
-            $imagefile = $check_file =
-                ilObjUser::_getPersonalPicturePath($user->getId(), 'big', false, true);
-        } else {
-            if ($this->offline) {
-                $imagefile = basename($imagefile);
-            } else {
-                $imagefile = ilWACSignedPath::signFile($imagefile . '?t=1');
-            }
-        }
-
-        if ($this->getPublicPref($user, 'public_upload') == 'y' && $imagefile != '' &&
-            ($this->current_user->getId() != ANONYMOUS_USER_ID || $user->getPref('public_profile') == 'g')) {
+        $imagefile = ilObjUser::_getPersonalPicturePath($user->getId(), 'big', false, true);
+        if ($this->getPublicPref($user, 'public_upload') === 'y' && $imagefile !== ''
+            && ($this->current_user->getId() !== ANONYMOUS_USER_ID || $user->getPref('public_profile') === 'g')) {
 
             $tpl->setCurrentBlock('image');
             $tpl->setVariable('TXT_IMAGE', $this->lng->txt('image'));
@@ -802,8 +759,6 @@ class ilPublicUserProfileGUI implements ilCtrlBaseClassInterface
         $this->tpl->resetHeaderBlock();
         $this->tpl->setTitle(ilUserUtil::getNamePresentation($this->getUserId()));
         $this->tpl->setTitleIcon(ilObjUser::_getPersonalPicturePath($this->getUserId(), 'xsmall'));
-
-        $this->handleBackUrl();
     }
 
     /**

@@ -52,6 +52,7 @@ class SurveyImportParser extends ilSaxParser
     public int $text_size = 0;
     public string $characterbuffer = "";
     public string $activetag = "";
+    public array $material = [];
     public array $metadata = [];
     public array $responses = [];
     public array $variables = [];
@@ -75,7 +76,6 @@ class SurveyImportParser extends ilSaxParser
     public array $questionblock = [];
     public array $questionblocks = [];
     public string $questionblocktitle = "";
-    protected array $material = [];
 
     public function __construct(
         int $a_spl_id,
@@ -91,6 +91,7 @@ class SurveyImportParser extends ilSaxParser
         $this->characterbuffer = "";
         $this->survey_status = false;
         $this->activetag = "";
+        $this->material = [];
         $this->depth = 0;
         $this->path = array();
         $this->metadata = array();
@@ -176,6 +177,7 @@ class SurveyImportParser extends ilSaxParser
      */
     public function handlerBeginTag($a_xml_parser, string $a_name, array $a_attribs): void
     {
+        $a_attribs = $this->trimAndStripAttribs($a_attribs);
         $this->depth++;
         $this->path[$this->depth] = strtolower($a_name);
         $this->characterbuffer = "";
@@ -256,7 +258,7 @@ class SurveyImportParser extends ilSaxParser
                     "value" => $a_attribs["value"],
 
                     // might be missing in old export files
-                    "conjunction" => (int) $a_attribs["conjuction"]
+                    "conjunction" => (int) ($a_attribs["conjuction"] ?? 0)
                 );
                 break;
             case "question":
@@ -317,6 +319,15 @@ class SurveyImportParser extends ilSaxParser
                     }
                 }
                 break;
+            case "material":
+                switch ($this->getParent()) {
+                    case "question":
+                    case "questiontext":
+                        $this->material = [];
+                        break;
+                }
+                $this->material[] = array("text" => "", "image" => "", "label" => $a_attribs["label"] ?? "");
+                break;
             case "matimage":
             case "label":
                 if (array_key_exists("label", $a_attribs)) {
@@ -342,16 +353,19 @@ class SurveyImportParser extends ilSaxParser
                 $this->matrix = array();
                 break;
             case "matrixrow":
+                $this->material = [];
                 $this->matrix[] = "";
                 $this->matrixrowattribs = array("id" => $a_attribs["id"], "label" => $a_attribs["label"] ?? "", "other" => $a_attribs["other"] ?? "");
                 break;
             case "responses":
+                $this->material = [];
                 $this->responses = array();
                 break;
             case "variables":
                 $this->variables = array();
                 break;
             case "response_single":
+                $this->material = [];
                 $this->responses[$a_attribs["id"]] = array("type" => "single",
                                                            "id" => $a_attribs["id"],
                                                            "label" => $a_attribs["label"] ?? "",
@@ -361,14 +375,17 @@ class SurveyImportParser extends ilSaxParser
                 $this->response_id = $a_attribs["id"];
                 break;
             case "response_multiple":
+                $this->material = [];
                 $this->responses[$a_attribs["id"]] = array("type" => "multiple", "id" => $a_attribs["id"], "label" => $a_attribs["label"] ?? "", "other" => $a_attribs["other"] ?? "", "neutral" => $a_attribs["neutral"] ?? "", "scale" => $a_attribs["scale"] ?? "");
                 $this->response_id = $a_attribs["id"];
                 break;
             case "response_text":
+                $this->material = [];
                 $this->responses[$a_attribs["id"]] = array("type" => "text", "id" => $a_attribs["id"], "columns" => $a_attribs["columns"], "maxlength" => $a_attribs["maxlength"] ?? null, "rows" => $a_attribs["rows"], "label" => $a_attribs["label"] ?? "");
                 $this->response_id = $a_attribs["id"];
                 break;
             case "response_num":
+                $this->material = [];
                 $this->responses[$a_attribs["id"]] = array("type" => "num", "id" => $a_attribs["id"], "format" => $a_attribs["format"], "max" => $a_attribs["max"] ?? null, "min" => $a_attribs["min"] ?? null, "size" => $a_attribs["size"] ?? null, "label" => $a_attribs["label"] ?? "");
                 $this->response_id = $a_attribs["id"];
                 break;
@@ -394,6 +411,11 @@ class SurveyImportParser extends ilSaxParser
         $this->text_size += strlen($a_data ?? "");
         $this->characterbuffer .= $a_data;
         $a_data = $this->characterbuffer;
+    }
+
+    protected function getCharacterBuffer(): string
+    {
+        return $this->trimAndStrip((string) $this->characterbuffer);
     }
 
     /**
@@ -458,14 +480,14 @@ class SurveyImportParser extends ilSaxParser
                 }
                 break;
             case "startingtime":
-                if (preg_match("/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}).*/", $this->characterbuffer, $matches)) {
+                if (preg_match("/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}).*/", $this->getCharacterBuffer(), $matches)) {
                     if (is_object($this->survey)) {
                         $this->survey->setStartDate(sprintf("%04d%02d%02d%02d%02d%02d", $matches[1], $matches[2], $matches[3], $matches[4], $matches[5], $matches[6]));
                     }
                 }
                 break;
             case "endingtime":
-                if (preg_match("/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}).*/", $this->characterbuffer, $matches)) {
+                if (preg_match("/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}).*/", $this->getCharacterBuffer(), $matches)) {
                     if (is_object($this->survey)) {
                         $this->survey->setEndDate(sprintf("%04d%02d%02d%02d%02d%02d", $matches[1], $matches[2], $matches[3], $matches[4], $matches[5], $matches[6]));
                     }
@@ -474,12 +496,12 @@ class SurveyImportParser extends ilSaxParser
             case "description":
                 if ($this->in_survey) {
                     if (is_object($this->survey)) {
-                        $this->survey->setDescription($this->characterbuffer);
+                        $this->survey->setDescription($this->getCharacterBuffer());
                         $this->survey->update(true);
                     }
                 } else {
                     if (is_object($this->activequestion)) {
-                        $this->activequestion->setDescription($this->characterbuffer);
+                        $this->activequestion->setDescription($this->getCharacterBuffer());
                     }
                 }
                 break;
@@ -510,34 +532,39 @@ class SurveyImportParser extends ilSaxParser
             case "author":
                 if ($this->in_survey) {
                     if (is_object($this->survey)) {
-                        $this->survey->setAuthor($this->characterbuffer);
+                        $this->survey->setAuthor($this->getCharacterBuffer());
                     }
                 } else {
                     if (is_object($this->activequestion)) {
-                        $this->activequestion->setAuthor($this->characterbuffer);
+                        $this->activequestion->setAuthor($this->getCharacterBuffer());
                     }
                 }
                 break;
             case "mattext":
-                $this->material[count($this->material) - 1]["text"] = $this->characterbuffer;
+                $this->material[count($this->material) - 1]["text"] = $this->getCharacterBuffer();
                 break;
             case "matimage":
-                $this->material[count($this->material) - 1]["image"] = $this->characterbuffer;
+                $this->material[count($this->material) - 1]["image"] = $this->getCharacterBuffer();
                 break;
             case "material":
                 if ($this->in_survey) {
                     if (strcmp($this->getParent(), "objectives") == 0) {
-                        if (strcmp($this->material[0]["label"], "introduction") == 0) {
+                        if (isset($this->material[0]) && strcmp($this->material[0]["label"], "introduction") == 0) {
                             if (is_object($this->survey)) {
                                 $this->survey->setIntroduction($this->material[0]["text"]);
                             }
                         }
-                        if (strcmp($this->material[0]["label"], "outro") == 0) {
+                        if (isset($this->material[0]) && strcmp($this->material[0]["label"], "outro") == 0) {
                             if (is_object($this->survey)) {
                                 $this->survey->setOutro($this->material[0]["text"]);
                             }
                         }
-                        $this->material = [];
+                        $this->material = array();
+                    }
+                } else {
+                    if (strcmp($this->getParent(), "question") == 0) {
+                        /*$this->activequestion->setMaterial($this->material[0]["text"], true,
+                            $this->material[0]["label"]);*/
                     }
                 }
                 break;
@@ -552,7 +579,7 @@ class SurveyImportParser extends ilSaxParser
                 $this->material = array();
                 break;
             case "fieldlabel":
-                $this->metadata[count($this->metadata) - 1]["label"] = $this->characterbuffer;
+                $this->metadata[count($this->metadata) - 1]["label"] = $this->getCharacterBuffer();
                 break;
             case "fieldentry":
                 $this->metadata[count($this->metadata) - 1]["entry"] = $this->characterbuffer;
@@ -657,7 +684,7 @@ class SurveyImportParser extends ilSaxParser
                 $this->is_matrix = false;
                 break;
             case "variable":
-                $this->variables[] = $this->characterbuffer;
+                $this->variables[] = $this->getCharacterBuffer();
                 break;
             case "variables":
                 if (is_object($this->activequestion)) {
@@ -672,7 +699,7 @@ class SurveyImportParser extends ilSaxParser
                 $this->responses[$this->response_id]["material"] = $this->material;
                 break;
             case "adjective":
-                $this->adjectives[count($this->adjectives) - 1]["text"] = $this->characterbuffer;
+                $this->adjectives[count($this->adjectives) - 1]["text"] = $this->getCharacterBuffer();
                 break;
             case "bipolar_adjectives":
                 if (is_object($this->activequestion)) {
@@ -692,10 +719,10 @@ class SurveyImportParser extends ilSaxParser
                 }
                 break;
             case "textblock":
-                $this->textblock = $this->characterbuffer;
+                $this->textblock = $this->getCharacterBuffer();
                 break;
             case "questionblocktitle":
-                $this->questionblocktitle = $this->characterbuffer;
+                $this->questionblocktitle = $this->getCharacterBuffer();
                 break;
             case "questionblock":
                 $this->in_questionblock = false;
@@ -755,5 +782,19 @@ class SurveyImportParser extends ilSaxParser
     public function hasError(): bool
     {
         return $this->has_error;
+    }
+
+    protected function trimAndStripAttribs(array $attribs): array
+    {
+        $ret = [];
+        foreach ($attribs as $k => $v) {
+            $ret[$k] = $this->trimAndStrip((string) $v);
+        }
+        return $ret;
+    }
+
+    protected function trimAndStrip(string $input): string
+    {
+        return ilUtil::stripSlashes(trim($input));
     }
 }

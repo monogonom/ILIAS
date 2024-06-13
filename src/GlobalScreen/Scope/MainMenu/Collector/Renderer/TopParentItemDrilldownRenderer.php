@@ -27,6 +27,9 @@ use ILIAS\GlobalScreen\Scope\MainMenu\Factory\Item\Link;
 use ILIAS\GlobalScreen\Scope\MainMenu\Factory\Item\LinkList;
 use ILIAS\Data\Factory;
 use Exception;
+use ILIAS\GlobalScreen\Scope\MainMenu\Factory\Item\RepositoryLink;
+use ILIAS\GlobalScreen\Scope\MainMenu\Factory\Item\Separator;
+use ILIAS\GlobalScreen\Scope\MainMenu\Factory\isTopItem;
 
 /**
  * Render a TopItem as Drilldown (DD in Slate)
@@ -41,7 +44,11 @@ class TopParentItemDrilldownRenderer extends BaseTypeRenderer
             if (!$child->isVisible()) {
                 continue;
             }
-            $entries[] = $this->buildEntry($child);
+            $component = $this->buildEntry($child, $item);
+            if ($component === null) {
+                continue;
+            }
+            $entries[] = $component;
         }
 
         $dd = $this->ui_factory->menu()->drilldown($item->getTitle(), $entries);
@@ -55,13 +62,14 @@ class TopParentItemDrilldownRenderer extends BaseTypeRenderer
         return $slate;
     }
 
-    protected function buildEntry(AbstractChildItem $item): Component
+    protected function buildEntry(AbstractChildItem $item, isTopItem $parent): ?Component
     {
         $title = $item->getTitle();
         $symbol = $this->getStandardSymbol($item);
         $type = get_class($item);
 
         switch ($type) {
+            case RepositoryLink::class:
             case Link::class:
                 $act = $this->getDataFactory()->uri(
                     $this->getBaseURL()
@@ -77,13 +85,18 @@ class TopParentItemDrilldownRenderer extends BaseTypeRenderer
                     if (!$child->isVisible()) {
                         continue;
                     }
-                    $links[] = $this->buildEntry($child);
+                    $links[] = $this->buildEntry($child, $parent);
                 }
                 $entry = $this->ui_factory->menu()->sub($title, $links);
                 break;
+            case Separator::class:
+                $entry = $this->ui_factory->divider()->horizontal()->withLabel($title);
+                break;
 
             default:
-                throw new Exception("Invalid type: " . $type, 1);
+                $entry = $this->ui_factory->divider()->horizontal()->withLabel(
+                    sprintf($this->txt('unable_to_render'), $title, $parent->getTitle())
+                );
         }
 
         return $entry;
@@ -97,5 +110,10 @@ class TopParentItemDrilldownRenderer extends BaseTypeRenderer
     private function getBaseURL(): string
     {
         return ILIAS_HTTP_PATH;
+    }
+
+    private function txt(string $key): string
+    {
+        return $this->lng->txt($key);
     }
 }

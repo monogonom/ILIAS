@@ -262,6 +262,8 @@ class Renderer extends AbstractComponentRenderer
                     $component->getMultiActionSignal(),
                     $modal->getShowSignal()
                 );
+                $total_number_of_cols = count($component->getVisibleColumns()) + 2; // + selection column and action dropdown column
+                $tpl->setVariable('COLUMN_COUNT', (string) $total_number_of_cols);
                 $tpl->setVariable('MULTI_ACTION_TRIGGERER', $default_renderer->render($multi_actions_dropdown));
                 $tpl->setVariable('MULTI_ACTION_ALL_MODAL', $default_renderer->render($modal));
             }
@@ -298,12 +300,12 @@ class Renderer extends AbstractComponentRenderer
             $col_title = $col->getTitle();
             if ($col_id === $sort_col) {
                 if ($sort_direction === Order::ASC) {
-                    $sortation = 'ascending';
+                    $sortation = $this->txt('order_option_generic_ascending');
                     $sortation_glyph = $glyph_factory->sortAscending("#");
                     $param_sort_direction = Order::DESC;
                 }
                 if ($sort_direction === Order::DESC) {
-                    $sortation = 'decending';
+                    $sortation = $this->txt('order_option_generic_descending');
                     $sortation_glyph = $glyph_factory->sortDescending("#");
                 }
             }
@@ -331,8 +333,11 @@ class Renderer extends AbstractComponentRenderer
         }
 
         if ($component->hasSingleActions()) {
-            $tpl->touchBlock('header_action_cell');
+            $tpl->setVariable('COL_INDEX_ACTION', (string) count($columns));
+            $tpl->setVariable('COL_TITLE_ACTION', $this->txt('actions'));
+
         }
+
         if ($component->hasMultiActions()) {
             $signal = $component->getSelectionSignal();
             $sig_all = clone $signal;
@@ -406,8 +411,8 @@ class Renderer extends AbstractComponentRenderer
                 $actions
             ),
             ""
-        );
-        $submit = $f->button()->primary($this->txt('datatable_multiactionmodal_buttonlabel'), '')
+        )->withRequired(true);
+        $submit = $f->button()->primary($this->txt('datatable_multiactionmodal_apply'), '')
             ->withOnLoadCode(
                 static fn($id): string => "$('#{$id}').click(function() { il.UI.table.data.get('{$table_id}').doActionForAll(this); return false; });"
             );
@@ -441,7 +446,7 @@ class Renderer extends AbstractComponentRenderer
         $buttons[] = $f->divider()->horizontal();
         $buttons[] = $f->button()->shy($this->txt('datatable_multiactionmodal_listentry'), '#')->withOnClick($modal_signal);
 
-        return $f->dropdown()->standard($buttons);
+        return $f->dropdown()->standard($buttons)->withLabel($this->txt('datatable_multiaction_label'));
     }
 
     protected function getAsyncActionHandler(Component\Signal $action_signal): \Closure

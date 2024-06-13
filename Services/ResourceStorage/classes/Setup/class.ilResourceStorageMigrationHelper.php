@@ -34,6 +34,8 @@ use ILIAS\ResourceStorage\Manager\Manager;
 use ILIAS\ResourceStorage\Preloader\StandardRepositoryPreloader;
 use ILIAS\ResourceStorage\Repositories;
 use ILIAS\ResourceStorage\Flavour\FlavourBuilder;
+use ILIAS\ResourceStorage\Events\Subject;
+use ILIAS\Setup\Objective\DirectoryCreatedObjective;
 
 /**
  * Class ilResourceStorageMigrationHelper
@@ -81,6 +83,10 @@ class ilResourceStorageMigrationHelper
         $this->client_data_dir = $client_data_dir;
         $this->database = $db;
 
+        if (!is_writable("{$data_dir}/{$client_id}/storage/fsv2")) {
+            throw new Exception('storage directory is not writable, abort...');
+        }
+
         // Build Container
         $init = new InitResourceStorage();
         $container = new Container();
@@ -92,7 +98,8 @@ class ilResourceStorageMigrationHelper
         $this->resource_builder = $init->getResourceBuilder($container);
         $this->flavour_builder = $init->getFlavourBuilder($container);
         $this->collection_builder = new CollectionBuilder(
-            new CollectionDBRepository($db)
+            new CollectionDBRepository($db),
+            new Subject()
         );
 
         $this->repositories = $container[InitResourceStorage::D_REPOSITORIES];
@@ -113,7 +120,8 @@ class ilResourceStorageMigrationHelper
             new ilIniFilesLoadedObjective(),
             new ilDatabaseInitializedObjective(),
             new ilDatabaseUpdatedObjective(),
-            new ilDatabaseUpdateStepsExecutedObjective(new ilResourceStorageDB90())
+            new ilDatabaseUpdateStepsExecutedObjective(new ilResourceStorageDB90()),
+            new ilStorageContainersExistingObjective()
         ];
     }
 
@@ -270,9 +278,16 @@ class ilResourceStorageMigrationHelper
         string $absolute_path,
         int $owner_user_id,
         ?Closure $file_name_callback = null,
-        ?Closure $revision_name_callback = null
+        ?Closure $revision_name_callback = null,
+        ?bool $copy_instead_of_move = false
     ): ?ResourceIdentification {
-        $open_path = fopen($absolute_path, 'rb');
+        try {
+            // in some cases fopen throws a warning instead of returning false
+            $open_path = fopen($absolute_path, 'rb');
+        } catch (Throwable $e) {
+            return null;
+        }
+
         if ($open_path === false) {
             return null;
         }
@@ -296,7 +311,7 @@ class ilResourceStorageMigrationHelper
                 $revision_title,
                 $file_name
             ),
-            false
+            $copy_instead_of_move ?? false
         );
 
         // add bibliographic stakeholder and store resource

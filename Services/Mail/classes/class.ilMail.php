@@ -574,8 +574,13 @@ class ilMail
                 $user,
                 $this->context_parameters
             );
-        } catch (Exception) {
-            $this->logger->error(__METHOD__ . ' has been called with invalid context.');
+        } catch (Exception $e) {
+            $this->logger->error(sprintf(
+                '%s has been called with invalid context: %s / %s',
+                __METHOD__,
+                $e->getMessage(),
+                $e->getTraceAsString()
+            ));
         }
 
         return $message;
@@ -682,7 +687,7 @@ class ilMail
             }
 
             $can_read_internal = $recipient->evaluateInternalMailReadability();
-            if (!$this->isSystemMail() && !$can_read_internal->isOk()) {
+            if ($this->isSystemMail() && !$can_read_internal->isOk()) {
                 $this->logger->debug(sprintf(
                     'Skipped recipient with id %s and reason: %s',
                     $recipient->getUserId(),
@@ -974,12 +979,13 @@ class ilMail
     ): array {
         global $DIC;
 
-        $this->logger->debug(
+        $this->logger->info(
             "New mail system task:" .
             " To: " . $a_rcp_to .
             " | CC: " . $a_rcp_cc .
             " | BCC: " . $a_rcp_bcc .
-            " | Subject: " . $a_m_subject
+            " | Subject: " . $a_m_subject .
+            " | Attachments: " . print_r($a_attachment, true)
         );
 
         if ($a_attachment && !$this->mail_file_data->checkFilesExist($a_attachment)) {

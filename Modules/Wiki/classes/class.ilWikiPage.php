@@ -127,7 +127,7 @@ class ilWikiPage extends ilPageObject
         $set = $ilDB->query(
             "SELECT id FROM il_wiki_page " .
             " WHERE id = " . $ilDB->quote($this->getId(), "integer") .
-            " AND lang = " . $ilDB->quote($this->getLanguage(), "integer")
+            " AND lang = " . $ilDB->quote($this->getLanguage(), "text")
         );
         if ($rec = $ilDB->fetchAssoc($set)) {
             $this->read(true);
@@ -561,13 +561,15 @@ class ilWikiPage extends ilPageObject
     ): void {
         parent::saveInternalLinks($a_domdoc);
 
-        $link_manager = $this->service->domain()->links($this->getWikiRefId());
-        $link_manager->saveInternalLinksForPage(
-            $a_domdoc,
-            $this->getId(),
-            $this->getTitle(),
-            $this->getLanguage()
-        );
+        if ($this->getWikiRefId() > 0) {
+            $link_manager = $this->service->domain()->links($this->getWikiRefId());
+            $link_manager->saveInternalLinksForPage(
+                $a_domdoc,
+                $this->getId(),
+                $this->getTitle(),
+                $this->getLanguage()
+            );
+        }
     }
 
     /**

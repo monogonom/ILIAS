@@ -18,10 +18,9 @@
 
 declare(strict_types=1);
 
-namespace ImportHandler\File\Path\Node;
+namespace ILIAS\Export\ImportHandler\File\Path\Node;
 
-use ImportHandler\I\File\Path\Node\ilAnyElementInterface as ilAnyElementFilePathNodeInterface;
-use XMLReader;
+use ILIAS\Export\ImportHandler\I\File\Path\Node\ilAnyElementInterface as ilAnyElementFilePathNodeInterface;
 
 class ilAnyElement implements ilAnyElementFilePathNodeInterface
 {

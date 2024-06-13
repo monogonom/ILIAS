@@ -49,7 +49,7 @@ class Numeric extends FormInput implements C\Input\Field\Numeric
             $this->refinery->kindlyTo()->null(),
             $this->refinery->kindlyTo()->int()
         ])
-        ->withProblemBuilder(fn($txt) => $txt("ui_numeric_only"));
+        ->withProblemBuilder(fn($txt) => $txt("numeric_only"));
 
         $this->setAdditionalTransformation($trafo_numericOrNull);
     }
@@ -57,7 +57,7 @@ class Numeric extends FormInput implements C\Input\Field\Numeric
     /**
      * @inheritdoc
      */
-    public function isClientSideValueOk($value): bool
+    protected function isClientSideValueOk($value): bool
     {
         return is_numeric($value) || $value === "" || $value === null;
     }

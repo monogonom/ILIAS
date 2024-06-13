@@ -18,23 +18,31 @@
 
 declare(strict_types=1);
 
-namespace ImportHandler;
+namespace ILIAS\Export\ImportHandler;
 
+use ilLanguage;
 use ilLogger;
-use ImportHandler\File\ilFactory as ilFileFactory;
-use ImportHandler\I\File\ilFactoryInterface as ilFileFactoryInterface;
-use ImportHandler\I\ilFactoryInterface as ilImportHandlerFactoryInterface;
-use ImportHandler\I\Parser\ilFactoryInterface as ilParserFactoryInterface;
-use ImportHandler\Parser\ilFactory as ilParserFactory;
+use ILIAS\Export\ImportHandler\File\ilFactory as ilFileFactory;
+use ILIAS\Export\ImportHandler\I\File\ilFactoryInterface as ilFileFactoryInterface;
+use ILIAS\Export\ImportHandler\I\ilFactoryInterface as ilImportHandlerFactoryInterface;
+use ILIAS\Export\ImportHandler\I\Parser\ilFactoryInterface as ilParserFactoryInterface;
+use ILIAS\Export\ImportHandler\Parser\ilFactory as ilParserFactory;
+use ILIAS\Export\Schema\ilXmlSchemaFactory;
 
 class ilFactory implements ilImportHandlerFactoryInterface
 {
     protected ilLogger $logger;
+    protected ilLanguage $lng;
+    protected ilXmlSchemaFactory $schema_factory;
+
 
     public function __construct()
     {
         global $DIC;
         $this->logger = $DIC->logger()->root();
+        $this->lng = $DIC->language();
+        $this->lng->loadLanguageModule("exp");
+        $this->schema_factory = new ilXmlSchemaFactory();
     }
 
     public function parser(): ilParserFactoryInterface
@@ -45,8 +53,9 @@ class ilFactory implements ilImportHandlerFactoryInterface
     public function file(): ilFileFactoryInterface
     {
         return new ilFileFactory(
-            new ilParserFactory($this->logger),
-            $this->logger
+            $this->logger,
+            $this->lng,
+            $this->schema_factory
         );
     }
 }

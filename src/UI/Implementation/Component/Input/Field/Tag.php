@@ -125,14 +125,14 @@ class Tag extends FormInput implements C\Input\Field\Tag
             $this->refinery->logical()->not($this->refinery->null()),
             $this->refinery->string()->hasMinLength(1)
         ])->withProblemBuilder(function ($txt) {
-            return $txt('ui_tag_required');
+            return $txt('tag_required');
         });
     }
 
     /**
      * @inheritDoc
      */
-    public function isClientSideValueOk($value): bool
+    protected function isClientSideValueOk($value): bool
     {
         if ($this->getMaxTags() > 0) {
             $max_tags = $this->getMaxTags();

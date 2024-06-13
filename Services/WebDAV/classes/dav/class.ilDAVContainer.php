@@ -125,7 +125,7 @@ class ilDAVContainer implements ICollection
             throw new Forbidden('Permission denied');
         }
 
-        $size = $this->request->getHeader("Content-Length")[0];
+        $size = $this->request->getHeader("Content-Length")[0] ?? 0;
         if ($size === 0 && $this->request->hasHeader('X-Expected-Entity-Length')) {
             $size = $this->request->getHeader('X-Expected-Entity-Length')[0];
         }
@@ -139,7 +139,11 @@ class ilDAVContainer implements ICollection
         } else {
             try {
                 $file_obj = new ilObjFile();
-                $file_obj->setTitle(substr($name, 0, strrpos($name, '.')));
+                $title = mb_substr($name, 0, strrpos($name, '.'));
+                if ($title === '') {
+                    $title = $name;
+                }
+                $file_obj->setTitle($title);
 
                 $file_dav = $this->dav_factory->createDAVObject($file_obj, $this->obj->getRefId());
             } catch (ilWebDAVNotDavableException $e) {

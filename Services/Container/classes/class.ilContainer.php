@@ -374,7 +374,10 @@ class ilContainer extends ilObject
 
             foreach ($settings as $keyword => $value) {
                 // :TODO: proper custom icon export/import
-                if (stripos($keyword, "icon") !== false) {
+                if (
+                    stripos($keyword, "icon") !== false
+                    && $keyword !== 'hide_header_icon_and_title'
+                ) {
                     continue;
                 }
 
@@ -680,6 +683,15 @@ class ilContainer extends ilObject
 
         $classification_filter_active = $this->isClassificationFilterActive();
         foreach ($objects as $key => $object) {
+            // see #41377, this ensures session materials to be preloaded
+            if (!self::$data_preloaded) {
+                if ($object["type"] === "sess") {
+                    $ev_items = ilObjectActivation::getItemsByEvent((int) $object["obj_id"]);
+                    foreach ($ev_items as $ev_item) {
+                        $preloader->addItem((int) $ev_item["obj_id"], $ev_item["type"], $ev_item["ref_id"]);
+                    }
+                }
+            }
             if ($a_get_single > 0 && $object["child"] != $a_get_single) {
                 continue;
             }
@@ -693,13 +705,12 @@ class ilContainer extends ilObject
             if ($objDefinition->isInactivePlugin($object["type"])) {
                 continue;
             }
-
             // BEGIN WebDAV: Don't display hidden Files, Folders and Categories
             if (in_array(
                 $object['type'],
                 ['file', 'fold', 'cat'],
                 true
-            ) && ilObjFileAccess::_isFileHidden($object['title'])) {
+            ) && ilObjFileAccess::_isFileHidden((string) $object['title'])) {
                 $this->setHiddenFilesFound(true);
                 if (!$a_admin_panel_enabled) {
                     continue;
@@ -707,9 +718,8 @@ class ilContainer extends ilObject
             }
             // END WebDAV: Don't display hidden Files, Folders and Categories
 
-            // including event items!
             if (!self::$data_preloaded) {
-                $preloader->addItem($object["obj_id"], $object["type"], $object["child"]);
+                $preloader->addItem((int) $object["obj_id"], $object["type"], $object["child"]);
             }
 
             // filter side block items
@@ -717,7 +727,7 @@ class ilContainer extends ilObject
                 continue;
             }
 
-            $all_ref_ids[] = $object["child"];
+            $all_ref_ids[] = (int) $object["child"];
         }
 
         // data preloader

@@ -98,7 +98,15 @@ class ilDAVFile implements IFile
             return $file_dav->put($data, $name);
         }
 
+        $file = null;
+        if (stream_get_meta_data($data)['stream_type'] === 'TEMP') {
+            $file = ilFileUtils::ilTempnam() . $name;
+            file_put_contents($file, $data);
+            $data = fopen($file, 'r');
+        }
+
         $stream = Streams::ofResource($data);
+        $title = $this->obj->getTitle();
 
         if ($this->versioning_enabled === true ||
             $this->obj->getVersion() === 0 && $this->obj->getMaxVersion() === 0) {
@@ -107,7 +115,13 @@ class ilDAVFile implements IFile
             $this->obj->replaceWithStream($stream, $name ?? $this->getName());
         }
 
+        $this->obj->setTitle($title);
+        $this->obj->update();
+
         $stream->close();
+        if ($file !== null) {
+            unlink($file);
+        }
 
         return $this->getETag();
     }
@@ -131,7 +145,7 @@ class ilDAVFile implements IFile
 
     public function getName(): string
     {
-        return ilFileUtils::getValidFilename($this->obj->getFileName());
+        return ilFileUtils::getValidFilename($this->obj->getTitle() . '.' . $this->obj->getFileExtension());
     }
 
     public function getContentType(): ?string
@@ -174,7 +188,7 @@ class ilDAVFile implements IFile
 
         if ($this->isDAVableObjTitle($name) &&
             $name === $this->obj->checkFileExtension($this->getName(), $name)) {
-            $this->obj->setTitle($name);
+            $this->obj->setTitle(mb_substr($name, 0, strrpos($name, '.')));
             $this->obj->update();
         } else {
             throw new ilWebDAVNotDavableException(ilWebDAVNotDavableException::OBJECT_TITLE_NOT_DAVABLE);

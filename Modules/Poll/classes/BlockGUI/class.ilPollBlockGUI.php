@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * This file is part of ILIAS, a powerful learning management system
  * published by ILIAS open source e-Learning e.V.
@@ -18,6 +16,8 @@ declare(strict_types=1);
  *
  ********************************************************************
  */
+
+declare(strict_types=1);
 
 use ILIAS\UI\Factory as UIFactory;
 use ILIAS\UI\Renderer as UIRenderer;
@@ -107,7 +107,8 @@ class ilPollBlockGUI extends ilBlockGUI
             $this->tpl,
             $this->getRefId(),
             $this->user->getId(),
-            $this->poll_block->getPoll()
+            $this->poll_block->getPoll(),
+            $this->getAdminCommands()
         );
     }
 

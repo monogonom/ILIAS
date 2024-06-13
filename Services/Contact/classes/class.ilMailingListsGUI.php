@@ -67,6 +67,8 @@ class ilMailingListsGUI
 
         $this->ctrl->saveParameter($this, 'mobj_id');
         $this->ctrl->saveParameter($this, 'ref');
+
+        $this->lng->loadLanguageModule('mail');
     }
 
     public function executeCommand(): bool
@@ -75,7 +77,7 @@ class ilMailingListsGUI
             !ilBuddySystem::getInstance()->isEnabled() ||
             (
                 0 === count(ilBuddyList::getInstanceByGlobalUser()->getLinkedRelations()) &&
-                $this->mlists->hasAny()
+                !$this->mlists->hasAny()
             )
         ) {
             $this->error->raiseError($this->lng->txt('msg_no_perm_read'), $this->error->MESSAGE);
@@ -347,16 +349,19 @@ class ilMailingListsGUI
             $this->mlists->getCurrentMailingList()->setDescription(
                 $this->form_gui->getInput('description')
             );
-            if ($this->mlists->getCurrentMailingList()->getId() !== 0) {
+
+            $this->tpl->setOnScreenMessage('success', $this->lng->txt('saved_successfully'), true);
+            if ($this->mlists->getCurrentMailingList()->getId() > 0) {
                 $this->mlists->getCurrentMailingList()->setChangedate(date('Y-m-d H:i:s'));
                 $this->mlists->getCurrentMailingList()->update();
+                $this->ctrl->redirect($this, 'showMailingLists');
             } else {
                 $this->mlists->getCurrentMailingList()->setCreatedate(date('Y-m-d H:i:s'));
                 $this->mlists->getCurrentMailingList()->insert();
-            }
 
-            $this->tpl->setOnScreenMessage('success', $this->lng->txt('saved_successfully'), true);
-            $this->ctrl->redirect($this, 'showMailingLists');
+                $this->ctrl->setParameter($this, 'ml_id', $this->mlists->getCurrentMailingList()->getId());
+                $this->ctrl->redirect($this, 'showMembersList');
+            }
         }
 
         $this->tpl->setTitle($this->lng->txt('mail_addressbook'));
@@ -614,7 +619,7 @@ class ilMailingListsGUI
             $formItem->setOptions($options);
             $form->addItem($formItem);
 
-            $form->addCommandButton('saveAssignmentForm', $this->lng->txt('assign'));
+            $form->addCommandButton('saveAssignmentForm', $this->lng->txt('mail_assign_to_mailing_list'));
         } elseif (count($options) === 1 && count($relations) > 0) {
             $this->tpl->setOnScreenMessage('info', $this->lng->txt('mail_mailing_lists_all_contact_entries_assigned'), true);
             $this->ctrl->redirect($this, 'showMembersList');

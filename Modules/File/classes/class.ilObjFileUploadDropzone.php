@@ -58,6 +58,15 @@ class ilObjFileUploadDropzone
         $this->content = $content;
     }
 
+    private function isCopyrightSelectionActive(): bool
+    {
+        static $active;
+        if ($active === null) {
+            $active = ilMDSettings::_getInstance()->isCopyrightSelectionActive();
+        }
+        return $active;
+    }
+
     public function getDropzone(): FileDropzone
     {
         $this->ctrl->setParameterByClass(
@@ -86,7 +95,7 @@ class ilObjFileUploadDropzone
 
         // add input for copyright selection if enabled in the metadata settings
         $additional_input = null;
-        if (ilMDSettings::_getInstance()->isCopyrightSelectionActive()) {
+        if ($this->isCopyrightSelectionActive()) {
             $additional_input = $this->getCopyrightSelectionInput('set_license_for_all_files');
         }
 
@@ -97,7 +106,7 @@ class ilObjFileUploadDropzone
             $this->ui->factory()->legacy($this->content ?? ''),
             $this->ui->factory()->input()->field()->file(
                 $this->upload_handler,
-                $this->language->txt('files'),
+                $this->language->txt('upload_files'),
                 null,
                 $this->ui->factory()->input()->field()->group([
                     ilObjFileGUI::PARAM_TITLE => $this->ui->factory()->input()->field()->text(
@@ -111,6 +120,8 @@ class ilObjFileUploadDropzone
                         $this->getEmptyStringToNullTransformation()
                     ),
                 ])
+            )->withRequired(
+                true
             )->withMaxFiles(
                 ilObjFileGUI::UPLOAD_MAX_FILES
             ),

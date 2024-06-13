@@ -49,6 +49,8 @@ class ilObjIndividualAssessmentGUI extends ilObjectGUI
     protected ilAccessHandler $ilAccess;
     protected ILIAS\Refinery\Factory $refinery;
     protected ILIAS\HTTP\Wrapper\RequestWrapper $request_wrapper;
+    protected ILIAS\ResourceStorage\Services $irss;
+
 
     public function __construct($data, int $id = 0, bool $call_by_reference = true, bool $prepare_output = true)
     {
@@ -64,6 +66,7 @@ class ilObjIndividualAssessmentGUI extends ilObjectGUI
         $this->tpl->loadStandardTemplate();
         $this->refinery = $DIC->refinery();
         $this->request_wrapper = $DIC->http()->wrapper()->query();
+        $this->irss = $DIC['resource_storage'];
 
         parent::__construct($data, $id, $call_by_reference, $prepare_output);
     }
@@ -117,9 +120,6 @@ class ilObjIndividualAssessmentGUI extends ilObjectGUI
                 $this->ctrl->forwardCommand($info);
                 break;
             case 'illearningprogressgui':
-                if (!$this->object->accessHandler()->mayReadObject()) {
-                    $this->handleAccessViolation();
-                }
                 $this->tabs_gui->activateTab(self::TAB_LP);
                 $learning_progress = new ilLearningProgressGUI(
                     ilLearningProgressBaseGUI::LP_CONTEXT_REPOSITORY,
@@ -152,11 +152,15 @@ class ilObjIndividualAssessmentGUI extends ilObjectGUI
             default:
                 if (!$cmd) {
                     $cmd = 'view';
-                    if ($this->object->accessHandler()->mayEditMembers()) {
+                    if ($this->object->accessHandler()->mayViewAnyUser() || $this->object->accessHandler()->mayEditMembers()) {
                         $this->ctrl->setCmdClass('ilIndividualassessmentmembersgui');
                         $cmd = 'members';
                     }
                 }
+                if($cmd === 'edit' && $this->object->accessHandler()->simulateMember()) {
+                    $cmd = 'view';
+                }
+
                 $cmd .= 'Object';
                 $this->$cmd();
         }
@@ -223,11 +227,20 @@ class ilObjIndividualAssessmentGUI extends ilObjectGUI
     protected function downloadFileObject(): void
     {
         $member = $this->object->membersStorage()->loadMember($this->object, $this->usr);
-        $file_storage = $this->object->getFileStorage();
-        $file_storage->setUserId($this->usr->getId());
-        $filepath = $file_storage->getAbsolutePath();
-        $filename = $member->fileName();
-        ilFileDelivery::deliverFileLegacy($filepath . "/" . $filename, $filename);
+        if (
+            $member
+            && $member->notify()
+            && $member->finalized()
+            && $member->viewFile()
+            && $member->fileName()
+            && $member->fileName() != ""
+        ) {
+            $identifier = $member->getGrading()->getFile();
+            $resource_id = $this->irss->manage()->find($identifier);
+            if($resource_id) {
+                $this->irss->consume()->download($resource_id)->run();
+            }
+        }
     }
 
     protected function addGeneralDataToInfo(ilInfoScreenGUI $info): ilInfoScreenGUI
@@ -309,7 +322,7 @@ class ilObjIndividualAssessmentGUI extends ilObjectGUI
         }
 
         if (($this->object->accessHandler()->mayViewAllUsers()
-            || $this->object->accessHandler()->mayGradeAllUsers()
+            || $this->object->accessHandler()->mayEditLearningProgressSettings()
             || ($this->object->loadMembers()->userAllreadyMember($this->usr)
             && $this->object->isActiveLP()))
             && ilObjUserTracking::_enabledLearningProgress()) {

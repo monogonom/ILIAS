@@ -346,6 +346,7 @@ class ilWikiDataSet extends ilDataSet
         ilImportMapping $a_mapping,
         string $a_schema_version
     ): void {
+        $a_rec = $this->stripTags($a_rec);
         switch ($a_entity) {
             case "wiki":
 
@@ -386,7 +387,7 @@ class ilWikiDataSet extends ilDataSet
 
             case "wpg":
                 $wiki_id = $a_mapping->getMapping("Modules/Wiki", "wiki", $a_rec["WikiId"]);
-                $lang = ($a_rec["Title"] ?? "");
+                $lang = ($a_rec["Lang"] ?? "");
                 $wpage = new ilWikiPage();
                 if (!in_array($lang, ["", "-"])) {
                     $wpage->setLanguage($lang);

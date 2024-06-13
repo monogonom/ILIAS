@@ -27,13 +27,16 @@ use ILIAS\Filesystem\Stream\FileStream;
 use ILIAS\FileDelivery\Token\Signer\Payload\FilePayload;
 use ILIAS\Filesystem\Stream\Streams;
 use ILIAS\FileDelivery\Delivery\ResponseBuilder\PHPResponseBuilder;
-use ILIAS\FileUpload\MimeType;
+use ILIAS\FileDelivery\Token\Signer\Payload\ShortFilePayload;
+use ILIAS\Filesystem\Stream\ZIPStream;
 
 /**
  * @author Fabian Schmid <fabian@sr.solutions>
  */
 final class StreamDelivery extends BaseDelivery
 {
+    public const SUBREQUEST_SEPARATOR = '/-/';
+
     public function __construct(
         private DataSigner $data_signer,
         \ILIAS\HTTP\Services $http,
@@ -76,7 +79,7 @@ final class StreamDelivery extends BaseDelivery
             $stream,
             $download_file_name,
             $mime_type,
-            Disposition::ATTACHMENT
+            Disposition::INLINE
         );
     }
 
@@ -96,7 +99,12 @@ final class StreamDelivery extends BaseDelivery
             $download_file_name,
             $disposition
         );
+        if ($stream instanceof ZIPStream) {
+            $this->response_builder = new PHPResponseBuilder();
+        }
+
         $r = $this->response_builder->buildForStream(
+            $this->http->request(),
             $r,
             $stream
         );
@@ -106,7 +114,7 @@ final class StreamDelivery extends BaseDelivery
     public function deliverFromToken(string $token): never
     {
         // check if $token has a sub-request, such as .../index.html
-        $parts = explode('/', $token);
+        $parts = explode(self::SUBREQUEST_SEPARATOR, $token);
         $sub_request = null;
         if (count($parts) > 1) {
             $token = $parts[0];
@@ -115,28 +123,48 @@ final class StreamDelivery extends BaseDelivery
 
         $r = $this->http->response();
         $payload = $this->data_signer->verifyStreamToken($token);
-        if (!$payload instanceof FilePayload) {
-            $this->notFound($r);
+
+        switch (true) {
+            case $payload instanceof FilePayload:
+                $uri = $payload->getUri();
+                $mime_type = $payload->getMimeType();
+                $file_name = $payload->getFilename();
+                $disposition = Disposition::tryFrom($payload->getDisposition()) ?? Disposition::INLINE;
+                break;
+            case $payload instanceof ShortFilePayload:
+                $uri = $payload->getUri();
+                $mime_type = $this->determineMimeType($uri);
+                $file_name = $payload->getFilename();
+                $disposition = Disposition::INLINE;
+                break;
+            default:
+                $this->notFound($r);
         }
+        unset($payload);
+
         // handle direct access to file
+
         if ($sub_request === null) {
             $r = $this->setGeneralHeaders(
                 $r,
-                $payload->getUri(),
-                $payload->getMimeType(),
-                $payload->getFilename(),
-                Disposition::from($payload->getDisposition())
+                $uri,
+                $mime_type,
+                $file_name,
+                $disposition
             );
 
             $this->http->saveResponse(
                 $this->response_builder->buildForStream(
+                    $this->http->request(),
                     $r,
-                    Streams::ofResource(fopen($payload->getUri(), 'rb'))
+                    Streams::ofResource(fopen($uri, 'rb'))
                 )
             );
         } else { // handle subrequest, aka file in a ZIP
-            $requested_zip = $payload->getUri();
+            $requested_zip = $uri;
             $sub_request = urldecode($sub_request);
+            // remove query
+            $sub_request = explode('?', $sub_request)[0];
             $file_inside_zip_uri = "zip://$requested_zip#$sub_request";
             $file_inside_zip_stream = fopen($file_inside_zip_uri, 'rb');
 
@@ -144,19 +172,21 @@ final class StreamDelivery extends BaseDelivery
                 $this->notFound($r);
             }
 
+            // we must use PHPResponseBuilder here, because the streams inside zips cant be delivered using XSendFile or others
+            $this->response_builder = new PHPResponseBuilder();
+
+            $mime_type = $this->determineMimeType($file_inside_zip_uri);
             $r = $this->setGeneralHeaders(
                 $r,
                 $file_inside_zip_uri,
-                $this->determineMimeType($file_inside_zip_uri),
+                $mime_type,
                 basename($sub_request),
                 Disposition::INLINE // subrequests are always inline per default, browsers may change this to download
             );
 
-            // we must use PHPResponseBuilder here, because the streams inside zips cant be delivered using XSendFile or others
-            $response_builder = new PHPResponseBuilder();
-
             $this->http->saveResponse(
-                $response_builder->buildForStream(
+                $this->response_builder->buildForStream(
+                    $this->http->request(),
                     $r,
                     Streams::ofResource($file_inside_zip_stream, true)
                 )
@@ -166,9 +196,9 @@ final class StreamDelivery extends BaseDelivery
         $this->http->close();
     }
 
-    private function determineMimeType(string $file_inside_zip_uri): string
+    private function determineMimeType(string $filename): string
     {
-        $suffix = strtolower(pathinfo($file_inside_zip_uri, PATHINFO_EXTENSION));
+        $suffix = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
         if (isset($this->mime_type_map[$suffix])) {
             if (is_array($this->mime_type_map[$suffix]) && isset($this->mime_type_map[$suffix][0])) {
                 return $this->mime_type_map[$suffix][0];
@@ -177,9 +207,9 @@ final class StreamDelivery extends BaseDelivery
             return $this->mime_type_map[$suffix];
         }
 
-        $mime_type = mime_content_type($file_inside_zip_uri);
+        $mime_type = mime_content_type($filename);
         if ($mime_type === 'application/octet-stream') {
-            $mime_type = mime_content_type(substr($file_inside_zip_uri, 6));
+            $mime_type = mime_content_type(substr($filename, 64));
         }
         return $mime_type ?: 'application/octet-stream';
     }

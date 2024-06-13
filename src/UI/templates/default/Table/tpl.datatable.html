@@ -31,7 +31,7 @@
 					<!-- END header_cell -->
 	
 					<!-- BEGIN header_action_cell -->
-					<th class="c-table-data__header c-table-data__cell c-table-data__rowaction" role="columnheader"></th>
+					<th class="c-table-data__header c-table-data__cell c-table-data__header__rowaction" role="columnheader" aria-colindex="{COL_INDEX_ACTION}">{COL_TITLE_ACTION}</th>
 					<!-- END header_action_cell -->
 				</tr>
 			</thead>
@@ -42,15 +42,17 @@
 					{CELLS}
 				</tr>
 				<!-- END row -->
+				<!-- BEGIN multi_action -->
+				<tr>
+					<td class="c-table-data__cell c-table-data__cell--multiaction" colspan="{COLUMN_COUNT}">
+						<div class="c-table-data__multiaction-triggerer">{MULTI_ACTION_TRIGGERER}</div>
+						{MULTI_ACTION_ALL_MODAL}
+					</td>
+				</tr>
+				<!-- END multi_action -->
 			</tbody>
-	
 		</table>
 	</div>
-
-	<!-- BEGIN multi_action -->
-	<div class="c-table-data__multiaction-triggerer">{MULTI_ACTION_TRIGGERER}</div>
-	{MULTI_ACTION_ALL_MODAL}
-	<!-- END multi_action -->
 
 	<div class="c-table-data__async_modal_container"></div>
 

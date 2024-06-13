@@ -36,16 +36,13 @@ use ILIAS\HTTP\Wrapper\RequestWrapper;
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilObjectTranslationGUI
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilCertificateGUI
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilObjStudyProgrammeAutoCategoriesGUI
-<<<<<<< HEAD
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilContainerGUI
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilContainerPageGUI
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilObjStyleSheetGUI
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilObjectContentStyleSettingsGUI
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilPRGPageObjectGUI
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilPRGMembersExportGUI
-=======
  * @ilCtrl_Calls ilObjStudyProgrammeGUI: ilPropertyFormGUI
->>>>>>> 44e35303c5c... StudyProgramme: fix internal links in custom md (28060)
  */
 class ilObjStudyProgrammeGUI extends ilContainerGUI
 {
@@ -252,6 +249,7 @@ class ilObjStudyProgrammeGUI extends ilContainerGUI
                 $this->ctrl->forwardCommand($output_gui);
                 break;
             case "ilprgpageobjectgui":
+                $this->denyAccessIfNot(ilPRGPermissionsHelper::ROLEPERM_WRITE);
                 if (!$this->object->hasContentPage()) {
                     $this->object->createContentPage();
                 }

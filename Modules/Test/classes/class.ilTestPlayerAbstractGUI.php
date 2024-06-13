@@ -167,7 +167,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
 
     public function suspendTestCmd()
     {
-        $this->ctrl->redirectByClass(ilTestScreenGUI::class, 'testScreen');
+        $this->ctrl->redirectByClass(ilTestScreenGUI::class, ilTestScreenGUI::DEFAULT_CMD);
     }
 
     public function isMaxProcessingTimeReached(): bool
@@ -559,17 +559,8 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
             exit;
         }
 
-        // answer is changed from authorized solution, so save the change as intermediate solution
-        if ($this->getAnswerChangedParameter()) {
-            $res = $this->saveQuestionSolution(false, true);
-        }
-        // answer is not changed from authorized solution, so delete an intermediate solution
-        else {
-            // @PHP8-CR: This looks like (yet) another issue in the dreaded autosaving.
-            // Any advice how to deal with it?
-            $db_res = $this->removeIntermediateSolution();
-            $res = is_int($db_res);
-        }
+        $authorize = !$this->getAnswerChangedParameter();
+        $res = $this->saveQuestionSolution($authorize, true);
 
         if ($res) {
             echo $this->lng->txt("autosave_success");
@@ -587,8 +578,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
     public function autosaveOnTimeLimitCmd()
     {
         if (!$this->isParticipantsAnswerFixed($this->getCurrentQuestionId())) {
-            // time limit saves the user solution as authorized
-            $this->saveQuestionSolution(true, true);
+            $this->saveQuestionSolution(false, true);
         }
         $this->ctrl->redirect($this, ilTestPlayerCommands::REDIRECT_ON_TIME_LIMIT);
     }
@@ -805,7 +795,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
             $this->ctrl->redirectByClass(['ilTestResultsGUI', 'ilMyTestResultsGUI', 'ilTestEvaluationGUI']);
         }
 
-        $this->ctrl->redirectByClass(ilTestScreenGUI::class, 'testScreen');
+        $this->ctrl->redirectByClass(ilTestScreenGUI::class, ilTestScreenGUI::DEFAULT_CMD);
     }
 
     /*
@@ -813,6 +803,11 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
     */
     public function showFinalStatementCmd()
     {
+        $this->global_screen->tool()->context()->current()->getAdditionalData()->replace(
+            ilTestPlayerLayoutProvider::TEST_PLAYER_VIEW_TITLE,
+            $this->object->getTitle() . ' - ' . $this->lng->txt('final_statement')
+        );
+
         $template = new ilTemplate("tpl.il_as_tst_final_statement.html", true, true, "Modules/Test");
         $this->ctrl->setParameter($this, "skipfinalstatement", 1);
         $template->setVariable("FORMACTION", $this->ctrl->getFormAction($this, ilTestPlayerCommands::AFTER_TEST_PASS_FINISHED));
@@ -821,7 +816,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
         $this->tpl->setVariable($this->getContentBlockName(), $template->get());
     }
 
-    protected function prepareTestPage($presentationMode, $sequenceElement, $questionId)
+    protected function prepareTestPage($sequenceElement, $questionId)
     {
         $this->navigation_history->addItem(
             $this->test_session->getRefId(),
@@ -927,6 +922,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
         $this->tpl->setVariable("FORMACTION", $formAction);
         $this->tpl->setVariable("ENCTYPE", 'enctype="' . $questionGui->getFormEncodingType() . '"');
         $this->tpl->setVariable("FORM_TIMESTAMP", time());
+        $this->populateQuestionEditControl($questionGui);
     }
 
     protected function showQuestionEditable(assQuestionGUI $questionGui, $formAction, $isQuestionWorkedThrough, $instantResponse)
@@ -1025,6 +1021,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
                 if ($previousSolutionAvailable) {
                     return $previousPass;
                 }
+
             }
         }
 
@@ -1308,6 +1305,11 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
 
         $this->tpl->addBlockFile($this->getContentBlockName(), "adm_content", "tpl.il_as_tst_question_summary.html", "Modules/Test");
 
+        $this->global_screen->tool()->context()->current()->getAdditionalData()->replace(
+            ilTestPlayerLayoutProvider::TEST_PLAYER_VIEW_TITLE,
+            $this->getObject()->getTitle() . ' - ' . $this->lng->txt('question_summary')
+        );
+
         if ($obligations_info
             && $this->object->areObligationsEnabled()
             && !$this->object->allObligationsAnswered()) {
@@ -1563,22 +1565,22 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
     protected function initTestPageTemplate()
     {
         $onload_js = <<<JS
-            let key_event = (event) => {
-                if( event.key === 13  && event.target.tagName.toLowerCase() === "a" ) {
-                    return;
-                }
-                if (event.key === 13 &&
-                    event.target.tagName.toLowerCase() !== "textarea" &&
-                    (event.target.tagName.toLowerCase() !== "input" || event.target.type.toLowerCase() !== "submit")) {
-                    event.preventDefault();
-                }
-            };
+    let key_event = (event) => {
+        if( event.key === 13  && event.target.tagName.toLowerCase() === "a" ) {
+            return;
+        }
+        if (event.key === 13 &&
+            event.target.tagName.toLowerCase() !== "textarea" &&
+            (event.target.tagName.toLowerCase() !== "input" || event.target.type.toLowerCase() !== "submit")) {
+            event.preventDefault();
+        }
+    };
 
-            let form = document.getElementById('taForm');
-            form.onkeyup = key_event;
-            form.onkeydown = key_event;
-            form.onkeypress = key_event;
-            JS;
+    let form = document.getElementById('taForm');
+    form.onkeyup = key_event;
+    form.onkeydown = key_event;
+    form.onkeypress = key_event;
+JS;
         $this->tpl->addOnLoadCode($onload_js);
         $this->tpl->addBlockFile(
             $this->getContentBlockName(),
@@ -1929,7 +1931,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
             // Notation of the params prior to getting rid of this crap in favor of a class
             $solutionoutput = $questionGui->getSolutionOutput(
                 $this->test_session->getActiveId(),    #active_id
-                null,                                                #pass
+                $this->test_session->getPass(),                                                #pass
                 false,                                                #graphical_output
                 $show_question_inline_score,                        #result_output
                 true,                                                #show_question_only
@@ -2441,6 +2443,7 @@ abstract class ilTestPlayerAbstractGUI extends ilTestServiceGUI
 
         // Forced feedback will change the navigation saving command
         $config['forcedInstantFeedback'] = $this->object->isForceInstantFeedbackEnabled();
+        $config['questionLocked'] = $this->isParticipantsAnswerFixed($question_gui->object->getId());
         $config['nextQuestionLocks'] = $this->object->isFollowupQuestionAnswerFixationEnabled();
 
         $this->tpl->addJavascript('./Modules/Test/js/ilTestPlayerQuestionEditControl.js');

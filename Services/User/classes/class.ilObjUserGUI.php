@@ -352,8 +352,8 @@ class ilObjUserGUI extends ilObjectGUI
      */
     public function createObject(): void
     {
-        if (!$this->rbac_system->checkAccess('create_usr', $this->usrf_ref_id) and
-            !$this->rbac_system->checkAccess('cat_administrate_users', $this->usrf_ref_id)) {
+        if (!$this->rbac_system->checkAccess('create_usr', $this->usrf_ref_id)
+            && !$this->rbac_system->checkAccess('cat_administrate_users', $this->usrf_ref_id)) {
             $this->ilias->raiseError($this->lng->txt('permission_denied'), $this->ilias->error_obj->MESSAGE);
         }
 
@@ -367,8 +367,8 @@ class ilObjUserGUI extends ilObjectGUI
      */
     public function saveObject(): void
     {
-        if (!$this->rbac_system->checkAccess('create_usr', $this->usrf_ref_id) &&
-            !$this->access->checkAccess('cat_administrate_users', '', $this->usrf_ref_id)) {
+        if (!$this->rbac_system->checkAccess('create_usr', $this->usrf_ref_id)
+            && !$this->access->checkAccess('cat_administrate_users', '', $this->usrf_ref_id)) {
             $this->ilias->raiseError($this->lng->txt('permission_denied'), $this->ilias->error_obj->MESSAGE);
         }
 
@@ -387,11 +387,13 @@ class ilObjUserGUI extends ilObjectGUI
             return;
         }
 
-        // @todo: external account; time limit check and savings
-
         // checks passed. save user
         $user_object = $this->loadValuesFromForm();
-        $user_object->setPasswd($this->form_gui->getInput('passwd'), ilObjUser::PASSWD_PLAIN);
+        if ($this->user->getId() === (int) SYSTEM_USER_ID
+            || !in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->object->getId()))
+            || in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->user->getId()))) {
+            $user_object->setPasswd($this->form_gui->getInput('passwd'), ilObjUser::PASSWD_PLAIN);
+        }
         $user_object->setTitle($user_object->getFullname());
         $user_object->setDescription($user_object->getEmail());
 
@@ -516,36 +518,7 @@ class ilObjUserGUI extends ilObjectGUI
 
     public function editObject(): void
     {
-        if ($this->usrf_ref_id == USER_FOLDER_ID
-            && (
-                !$this->rbac_system->checkAccess('visible,read', $this->usrf_ref_id)
-                || !$this->rbac_system->checkAccess('write', $this->usrf_ref_id)
-                    && !$this->access->checkPositionAccess(\ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS, $this->usrf_ref_id)
-                || $this->access->checkPositionAccess(\ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS, $this->usrf_ref_id)
-                    && !in_array(
-                        $this->object->getId(),
-                        $this->access->filterUserIdsByPositionOfCurrentUser(
-                            \ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS,
-                            USER_FOLDER_ID,
-                            [$this->object->getId()]
-                        )
-                    )
-            )
-        ) {
-            $this->ilias->raiseError($this->lng->txt('msg_no_perm_modify_user'), $this->ilias->error_obj->MESSAGE);
-        }
-
-        if ($this->usrf_ref_id == USER_FOLDER_ID and !$this->rbac_system->checkAccess('visible,read', $this->usrf_ref_id)) {
-            $this->ilias->raiseError($this->lng->txt('msg_no_perm_modify_user'), $this->ilias->error_obj->MESSAGE);
-        }
-        // if called from local administration $this->usrf_ref_id is category id
-        // Todo: this has to be fixed. Do not mix user folder id and category id
-        if ($this->usrf_ref_id != USER_FOLDER_ID) {
-            // check if user is assigned to category
-            if (!$this->rbac_system->checkAccess('cat_administrate_users', $this->object->getTimeLimitOwner())) {
-                $this->ilias->raiseError($this->lng->txt('msg_no_perm_modify_user'), $this->ilias->error_obj->MESSAGE);
-            }
-        }
+        $this->checkUserWriteRight();
 
         if ($this->usrf_ref_id != USER_FOLDER_ID) {
             $this->tabs_gui->clearTargets();
@@ -715,34 +688,7 @@ class ilObjUserGUI extends ilObjectGUI
 
     public function updateObject(): void
     {
-        // User folder && access granted by rbac or by org unit positions
-        if ($this->usrf_ref_id == USER_FOLDER_ID &&
-            (
-                !$this->rbac_system->checkAccess('visible,read', USER_FOLDER_ID) ||
-                !$this->access->checkRbacOrPositionPermissionAccess(
-                    'write',
-                    \ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS,
-                    USER_FOLDER_ID
-                ) ||
-                !in_array(
-                    $this->object->getId(),
-                    $this->access->filterUserIdsByRbacOrPositionOfCurrentUser(
-                        'write',
-                        \ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS,
-                        USER_FOLDER_ID,
-                        [$this->object->getId()]
-                    )
-                )
-            )
-        ) {
-            $this->ilias->raiseError($this->lng->txt('msg_no_perm_modify_user'), $this->ilias->error_obj->MESSAGE);
-        }
-        // if called from local administration $this->usrf_ref_id is category id
-        // Todo: this has to be fixed. Do not mix user folder id and category id
-        if ($this->usrf_ref_id != USER_FOLDER_ID
-            && !$this->rbac_system->checkAccess('cat_administrate_users', $this->object->getTimeLimitOwner())) {
-            $this->ilias->raiseError($this->lng->txt('msg_no_perm_modify_user'), $this->ilias->error_obj->MESSAGE);
-        }
+        $this->checkUserWriteRight();
         $this->initForm('edit');
 
         // Manipulate form so ignore required fields are no more required. This has to be done before ilPropertyFormGUI::checkInput() is called.
@@ -1025,21 +971,25 @@ class ilObjUserGUI extends ilObjectGUI
 
         $this->form_gui->addItem($lo);
 
-        $pw = new ilPasswordInputGUI($this->lng->txt('passwd'), 'passwd');
-        $pw->setUseStripSlashes(false);
-        $pw->setSize(32);
-        $pw->setMaxLength(80);
-        $pw->setValidateAuthPost('auth_mode');
-        if ($a_mode == 'create') {
-            $pw->setRequiredOnAuth(true);
+        if ($this->user->getId() === (int) SYSTEM_USER_ID
+            || !in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->object->getId()))
+            || in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->user->getId()))) {
+            $pw = new ilPasswordInputGUI($this->lng->txt('passwd'), 'passwd');
+            $pw->setUseStripSlashes(false);
+            $pw->setSize(32);
+            $pw->setMaxLength(80);
+            $pw->setValidateAuthPost('auth_mode');
+            if ($a_mode == 'create') {
+                $pw->setRequiredOnAuth(true);
+            }
+            if ($this->user->getId() !== (int) SYSTEM_USER_ID
+                && in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->object->getId()))
+                && !in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->user->getId()))) {
+                $pw->setDisabled(true);
+            }
+            $pw->setInfo(ilSecuritySettingsChecker::getPasswordRequirementsInfo());
+            $this->form_gui->addItem($pw);
         }
-        if ($this->user->getId() !== (int) SYSTEM_USER_ID
-            && in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->object->getId()))
-            && !in_array(SYSTEM_ROLE_ID, $this->rbac_review->assignedRoles($this->user->getId()))) {
-            $pw->setDisabled(true);
-        }
-        $pw->setInfo(ilSecuritySettingsChecker::getPasswordRequirementsInfo());
-        $this->form_gui->addItem($pw);
 
         if (ilAuthUtils::_isExternalAccountEnabled()) {
             $ext = new ilTextInputGUI($this->lng->txt('user_ext_account'), 'ext_account');
@@ -1326,18 +1276,21 @@ class ilObjUserGUI extends ilObjectGUI
         }
 
         if ($this->isSettingChangeable('language')) {
-            $lang = new ilSelectInputGUI(
-                $this->lng->txt('language'),
-                'language'
-            );
             $languages = $this->lng->getInstalledLanguages();
             $this->lng->loadLanguageModule('meta');
             $options = [];
             foreach ($languages as $l) {
                 $options[$l] = $this->lng->txt('meta_l_' . $l);
             }
+            $lang = new ilSelectInputGUI(
+                $this->lng->txt('language'),
+                'language'
+            );
             $lang->setOptions($options);
             $lang->setValue($this->settings->get('language'));
+            if (count($options) <= 1) {
+                $lang->setDisabled(true);
+            }
             $this->form_gui->addItem($lang);
         }
 
@@ -2012,5 +1965,36 @@ class ilObjUserGUI extends ilObjectGUI
         }
 
         return $profile_maybe_incomplete;
+    }
+
+    private function checkUserWriteRight(): void
+    {
+        if ($this->usrf_ref_id == USER_FOLDER_ID
+            && (
+                !$this->rbac_system->checkAccess('visible,read', $this->usrf_ref_id)
+                || !$this->rbac_system->checkAccess('write', $this->usrf_ref_id)
+                    && (
+                        !$this->access->checkPositionAccess(\ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS, $this->usrf_ref_id)
+                        || $this->access->checkPositionAccess(\ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS, $this->usrf_ref_id)
+                            && !in_array(
+                                $this->object->getId(),
+                                $this->access->filterUserIdsByPositionOfCurrentUser(
+                                    \ilObjUserFolder::ORG_OP_EDIT_USER_ACCOUNTS,
+                                    USER_FOLDER_ID,
+                                    [$this->object->getId()]
+                                )
+                            )
+                    )
+            )
+        ) {
+            $this->ilias->raiseError($this->lng->txt('msg_no_perm_modify_user'), $this->ilias->error_obj->MESSAGE);
+        }
+
+        // if called from local administration $this->usrf_ref_id is category id
+        // Todo: this has to be fixed. Do not mix user folder id and category id
+        if ($this->usrf_ref_id != USER_FOLDER_ID
+            && !$this->rbac_system->checkAccess('cat_administrate_users', $this->object->getTimeLimitOwner())) {
+            $this->ilias->raiseError($this->lng->txt('msg_no_perm_modify_user'), $this->ilias->error_obj->MESSAGE);
+        }
     }
 }

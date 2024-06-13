@@ -44,8 +44,11 @@ abstract class assQuestion
 
     protected const DEFAULT_THUMB_SIZE = 150;
     protected const MINIMUM_THUMB_SIZE = 20;
+    public const TRIM_PATTERN = '/^[\p{C}\p{Z}]+|[\p{C}\p{Z}]+$/u';
+
     protected \ILIAS\TestQuestionPool\QuestionInfoService $questioninfo;
     protected \ILIAS\Test\TestParticipantInfoService $testParticipantInfo;
+
     protected ILIAS\HTTP\Services $http;
     protected ILIAS\Refinery\Factory $refinery;
     protected \ILIAS\TestQuestionPool\QuestionFilesService $questionFilesService;
@@ -357,7 +360,7 @@ abstract class assQuestion
 
     public function setAuthor(string $author = ""): void
     {
-        if (!$author) {
+        if ($author === '') {
             $author = $this->current_user->getFullname();
         }
         $this->author = $author;
@@ -371,6 +374,11 @@ abstract class assQuestion
     public function getTitle(): string
     {
         return $this->title;
+    }
+
+    public function getTitleForHTMLOutput(): string
+    {
+        return $this->refinery->string()->stripTags()->transform($this->title);
     }
 
     public function getTitleFilenameCompliant(): string
@@ -398,6 +406,11 @@ abstract class assQuestion
         return $this->comment;
     }
 
+    public function getDescriptionForHTMLOutput(): string
+    {
+        return $this->refinery->string()->stripTags()->transform($this->comment);
+    }
+
     public function getThumbSize(): int
     {
         return $this->thumb_size;
@@ -420,6 +433,11 @@ abstract class assQuestion
     public function getAuthor(): string
     {
         return $this->author;
+    }
+
+    public function getAuthorForHTMLOutput(): string
+    {
+        return $this->refinery->string()->stripTags()->transform($this->author);
     }
 
     public function getOwner(): int
@@ -825,7 +843,7 @@ abstract class assQuestion
      */
     public function getSolutionValues($active_id, $pass = null, bool $authorized = true): array
     {
-        if (is_null($pass)) {
+        if ($pass === null && is_numeric($active_id)) {
             $pass = $this->getSolutionMaxPass((int) $active_id);
         }
 
@@ -1418,10 +1436,12 @@ abstract class assQuestion
         return null;
     }
 
-    protected function syncSuggestedSolutions(int $source_question_id, int $target_question_id): void
-    {
-        $this->getSuggestedSolutionsRepo()->syncForQuestion($source_question_id, $target_question_id);
-        $this->syncSuggestedSolutionFiles($source_question_id);
+    protected function syncSuggestedSolutions(
+        int $target_question_id,
+        int $target_obj_id
+    ): void {
+        $this->getSuggestedSolutionsRepo()->syncForQuestion($this->getId(), $target_question_id);
+        $this->syncSuggestedSolutionFiles($target_question_id, $target_obj_id);
     }
 
     /**
@@ -1430,9 +1450,7 @@ abstract class assQuestion
     protected function duplicateSuggestedSolutionFiles(int $parent_id, int $question_id): void
     {
         foreach ($this->suggested_solutions as $index => $solution) {
-            if (!is_array($solution) ||
-                !array_key_exists("type", $solution) ||
-                strcmp($solution["type"], "file") !== 0) {
+            if (!$solution->isOfTypeFile()) {
                 continue;
             }
 
@@ -1454,10 +1472,16 @@ abstract class assQuestion
         }
     }
 
-    protected function syncSuggestedSolutionFiles(int $original_id): void
-    {
+    protected function syncSuggestedSolutionFiles(
+        int $target_question_id,
+        int $target_obj_id
+    ): void {
         $filepath = $this->getSuggestedSolutionPath();
-        $filepath_original = str_replace("/$this->id/solution", "/$original_id/solution", $filepath);
+        $filepath_original = str_replace(
+            "{$this->getObjId()}/{$this->id}/solution",
+            "{$target_obj_id}/{$target_question_id}/solution",
+            $filepath
+        );
         ilFileUtils::delDir($filepath_original);
         foreach ($this->suggested_solutions as $index => $solution) {
             if ($solution->isOfTypeFile()) {
@@ -1524,24 +1548,21 @@ abstract class assQuestion
         return $resolved_link ?? '';
     }
 
-
-    //TODO: move this to import or suggested solutions repo.
-    //use in LearningModule and Survey as well ;(
-    public function _resolveIntLinks(int $question_id): void
+    public function resolveSuggestedSolutionLinks(): void
     {
         $resolvedlinks = 0;
         $result = $this->db->queryF(
             "SELECT * FROM qpl_sol_sug WHERE question_fi = %s",
             array('integer'),
-            array($question_id)
+            array($this->getId())
         );
         if ($this->db->numRows($result) > 0) {
             while ($row = $this->db->fetchAssoc($result)) {
                 $internal_link = $row["internal_link"];
                 $resolved_link = $this->resolveInternalLink($internal_link);
-                if (strcmp($internal_link, $resolved_link) != 0) {
+                if ($internal_link !== $resolved_link) {
                     // internal link was resolved successfully
-                    $affectedRows = $this->db->manipulateF(
+                    $this->db->manipulateF(
                         "UPDATE qpl_sol_sug SET internal_link = %s WHERE suggested_solution_id = %s",
                         array('text','integer'),
                         array($resolved_link, $row["suggested_solution_id"])
@@ -1553,17 +1574,17 @@ abstract class assQuestion
         if ($resolvedlinks) {
             // there are resolved links -> reenter theses links to the database
             // delete all internal links from the database
-            ilInternalLink::_deleteAllLinksOfSource("qst", $question_id);
+            ilInternalLink::_deleteAllLinksOfSource("qst", $this->getId());
 
             $result = $this->db->queryF(
                 "SELECT * FROM qpl_sol_sug WHERE question_fi = %s",
                 array('integer'),
-                array($question_id)
+                array($this->getId())
             );
             if ($this->db->numRows($result) > 0) {
                 while ($row = $this->db->fetchAssoc($result)) {
                     if (preg_match("/il_(\d*?)_(\w+)_(\d+)/", $row["internal_link"], $matches)) {
-                        ilInternalLink::_saveLink("qst", $question_id, $matches[2], $matches[3], $matches[1]);
+                        ilInternalLink::_saveLink("qst", $this->getId(), $matches[2], $matches[3], $matches[1]);
                     }
                 }
             }
@@ -1604,20 +1625,34 @@ abstract class assQuestion
 
     public function syncWithOriginal(): void
     {
-        if (!$this->getOriginalId()) {
+        $original_id = $this->getOriginalId();
+        if ($original_id === null) {
             return; // No original -> no sync
         }
 
-        $originalObjId = self::lookupParentObjId($this->getOriginalId());
+        $original_obj_id = self::lookupParentObjId($this->getOriginalId());
 
-        if (!$originalObjId) {
+        if (!$original_obj_id) {
             return; // Original does not exist -> no sync
         }
 
-        $this->beforeSyncWithOriginal($this->getOriginalId(), $this->getId(), $originalObjId, $this->getObjId());
-        $this->syncSuggestedSolutions($this->getId(), $this->getOriginalId());
+        $this->beforeSyncWithOriginal($this->getOriginalId(), $this->getId(), $original_obj_id, $this->getObjId());
+
+        $original = clone $this;
+        // Now we become the original
+        $original->setId($this->getOriginalId());
+        $original->setOriginalId(null);
+        $original->setObjId($original_obj_id);
+
+        $original->saveToDb();
+
+        $original->deletePageOfQuestion($this->getOriginalId());
+        $original->createPageObject();
+        $original->copyPageOfQuestion($this->getId());
+
+        $this->syncSuggestedSolutions($this->getOriginalId(), $original_obj_id);
         $this->syncXHTMLMediaObjectsOfQuestion();
-        $this->afterSyncWithOriginal($this->getId(), $this->getOriginalId(), $this->getObjId(), $originalObjId);
+        $this->afterSyncWithOriginal($this->getId(), $this->getOriginalId(), $this->getObjId(), $original_obj_id);
         $this->syncHints();
     }
 
@@ -1661,7 +1696,7 @@ abstract class assQuestion
         $this->points = $points;
     }
 
-    public function getSolutionMaxPass(int $active_id): int
+    public function getSolutionMaxPass(int $active_id): ?int
     {
         return self::_getSolutionMaxPass($this->getId(), $active_id);
     }
@@ -1669,7 +1704,7 @@ abstract class assQuestion
     /**
     * Returns the maximum pass a users question solution
     */
-    public static function _getSolutionMaxPass(int $question_id, int $active_id): int
+    public static function _getSolutionMaxPass(int $question_id, int $active_id): ?int
     {
         // the following code was the old solution which added the non answered
         // questions of a pass from the answered questions of the previous pass
@@ -1682,12 +1717,12 @@ abstract class assQuestion
             array('integer','integer'),
             array($active_id, $question_id)
         );
-        if ($result->numRows() == 1) {
+        if ($result->numRows() === 1) {
             $row = $ilDB->fetchAssoc($result);
-            return (int) $row["maxpass"];
+            return $row["maxpass"];
         }
 
-        return 0;
+        return null;
     }
 
     public static function _isWriteable(int $question_id, int $user_id): bool
@@ -1724,7 +1759,7 @@ abstract class assQuestion
      * @param boolean $returndetails (deprecated !!)
      * @return integer/array $points/$details (array $details is deprecated !!)
      */
-    abstract public function calculateReachedPoints($active_id, $pass = null, $authorizedSolution = true, $returndetails = false);
+    abstract public function calculateReachedPoints($active_id, $pass = null, $authorizedSolution = true, $returndetails = false): float|array;
 
     public function deductHintPointsFromReachedPoints(ilAssQuestionPreviewSession $previewSession, $reachedPoints): ?float
     {
@@ -1830,19 +1865,22 @@ abstract class assQuestion
         }
 
         if ($points <= $maxpoints) {
-            if (is_null($pass)) {
+            if ($pass === null) {
                 $pass = assQuestion::_getSolutionMaxPass($question_id, $active_id);
             }
 
-            // retrieve the already given points
+            $rowsnum = 0;
             $old_points = 0;
-            $result = $ilDB->queryF(
-                "SELECT points FROM tst_test_result WHERE active_fi = %s AND question_fi = %s AND pass = %s",
-                array('integer','integer','integer'),
-                array($active_id, $question_id, $pass)
-            );
-            $manual = ($manualscoring) ? 1 : 0;
-            $rowsnum = $result->numRows();
+
+            if ($pass !== null) {
+                $result = $ilDB->queryF(
+                    "SELECT points FROM tst_test_result WHERE active_fi = %s AND question_fi = %s AND pass = %s",
+                    array('integer','integer','integer'),
+                    array($active_id, $question_id, $pass)
+                );
+                $manual = ($manualscoring) ? 1 : 0;
+                $rowsnum = $result->numRows();
+            }
             if ($rowsnum > 0) {
                 $row = $ilDB->fetchAssoc($result);
                 $old_points = $row["points"];
@@ -2737,8 +2775,11 @@ abstract class assQuestion
         return (bool) $solutionAvailability['intermediate'];
     }
 
-    public function authorizedSolutionExists(int $active_id, int $pass): bool
+    public function authorizedSolutionExists(int $active_id, ?int $pass): bool
     {
+        if ($pass === null) {
+            return false;
+        }
         $solutionAvailability = $this->lookupForExistingSolutions($active_id, $pass);
         return (bool) $solutionAvailability['authorized'];
     }
@@ -2847,7 +2888,7 @@ abstract class assQuestion
         $this->log($activeId, "log_user_solution_willingly_deleted");
 
         $test = new ilObjTest(
-            ilObjTest::_lookupTestObjIdForQuestionId($this->getId()),
+            $this->test_id,
             false
         );
         $test->updateTestPassResults(
@@ -2963,4 +3004,24 @@ abstract class assQuestion
         $question_id = $this->getId();
         return $this->getSuggestedSolutionsRepo()->selectFor($question_id);
     }
+
+    /**
+     * Trim non-printable characters from the beginning and end of a string.
+     *
+     * Note: The PHP trim() function is not fully Unicode-compatible and may not handle
+     * non-printable characters effectively. As a result, it may not trim certain Unicode
+     * characters, such as control characters, zero width characters or ideographic space as expected.
+     *
+     * This method provides a workaround for trimming non-printable characters until PHP 8.4,
+     * where the mb_trim() function is introduced. Users are encouraged to migrate to mb_trim()
+     * for proper Unicode and non-printable character handling.
+     *
+     * @param string $value The string to trim.
+     * @return string The trimmed string.
+     */
+    public static function extendedTrim(string $value): string
+    {
+        return preg_replace(self::TRIM_PATTERN, '', $value);
+    }
+
 }

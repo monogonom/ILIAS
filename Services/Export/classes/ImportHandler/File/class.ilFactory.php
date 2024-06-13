@@ -18,44 +18,49 @@
 
 declare(strict_types=1);
 
-namespace ImportHandler\File;
+namespace ILIAS\Export\ImportHandler\File;
 
+use ilLanguage;
 use ilLogger;
-use ImportHandler\File\Validation\ilFactory as ilFileValidationFactory;
-use ImportHandler\File\XML\ilFactory as ilXMLFileFactory;
-use ImportHandler\File\XML\Manifest\ilFactory as ilManifestFileFactory;
-use ImportHandler\File\XSD\ilFactory as ilXSDFileFactory;
-use ImportHandler\I\File\ilFactoryInterface as ilFileFactory;
-use ImportHandler\I\File\ilFactoryInterface as ilFileFactoryInterface;
-use ImportHandler\I\File\Namespace\ilFactoryInterface as ilFileNamespaceFactoryInterface;
-use ImportHandler\I\File\Path\ilFactoryInterface as ilFilePathFactoryInterface;
-use ImportHandler\I\File\Validation\ilFactoryInterface as ilFileValidationFactoryInterface;
-use ImportHandler\I\File\XML\ilFactoryInterface as ilXMLFileFactoryInterface;
-use ImportHandler\I\File\XML\Manifest\ilFactoryInterface as ilManifestFileFactoryInterface;
-use ImportHandler\I\File\XSD\ilFactoryInterface as ilXSDFileFactoryInterface;
-use ImportHandler\I\Parser\ilFactoryInterface as ilParserFactoryInterface;
-use ImportHandler\File\Path\ilFactory as ilFilePathFactory;
-use ImportHandler\File\Namespace\ilFactory as ilFileNamespaceFactory;
+use ILIAS\Export\ImportHandler\File\Validation\ilFactory as ilFileValidationFactory;
+use ILIAS\Export\ImportHandler\File\XML\ilFactory as ilXMLFileFactory;
+use ILIAS\Export\ImportHandler\File\XML\Manifest\ilFactory as ilManifestFileFactory;
+use ILIAS\Export\ImportHandler\File\XSD\ilFactory as ilXSDFileFactory;
+use ILIAS\Export\ImportHandler\I\File\ilFactoryInterface as ilFileFactory;
+use ILIAS\Export\ImportHandler\I\File\ilFactoryInterface as ilFileFactoryInterface;
+use ILIAS\Export\ImportHandler\I\File\Namespace\ilFactoryInterface as ilFileNamespaceFactoryInterface;
+use ILIAS\Export\ImportHandler\I\File\Path\ilFactoryInterface as ilFilePathFactoryInterface;
+use ILIAS\Export\ImportHandler\I\File\Validation\ilFactoryInterface as ilFileValidationFactoryInterface;
+use ILIAS\Export\ImportHandler\I\File\XML\ilFactoryInterface as ilXMLFileFactoryInterface;
+use ILIAS\Export\ImportHandler\I\File\XML\Manifest\ilFactoryInterface as ilManifestFileFactoryInterface;
+use ILIAS\Export\ImportHandler\I\File\XSD\ilFactoryInterface as ilXSDFileFactoryInterface;
+use ILIAS\Export\ImportHandler\I\Parser\ilFactoryInterface as ilParserFactoryInterface;
+use ILIAS\Export\ImportHandler\File\Path\ilFactory as ilFilePathFactory;
+use ILIAS\Export\ImportHandler\File\Namespace\ilFactory as ilFileNamespaceFactory;
+use ILIAS\Export\Schema\ilXmlSchemaFactory;
 
 class ilFactory implements ilFileFactory
 {
     protected ilLogger $logger;
-    protected ilParserFactoryInterface $parser;
+    protected ilLanguage $lng;
+    protected ilXmlSchemaFactory $schema_factory;
 
     public function __construct(
-        ilParserFactoryInterface $parser,
-        ilLogger $logger
+        ilLogger $logger,
+        ilLanguage $lng,
+        ilXmlSchemaFactory $schema_factory
     ) {
         $this->logger = $logger;
-        $this->parser = $parser;
+        $this->lng = $lng;
+        $this->schema_factory = $schema_factory;
     }
 
     public function xml(): ilXMLFileFactoryInterface
     {
         return new ilXMLFileFactory(
-            $this,
-            $this->parser,
-            $this->logger
+            $this->logger,
+            $this->lng,
+            $this->schema_factory
         );
     }
 
@@ -66,11 +71,7 @@ class ilFactory implements ilFileFactory
 
     public function validation(): ilFileValidationFactoryInterface
     {
-        return new ilFileValidationFactory(
-            $this->logger,
-            $this->parser,
-            new ilFilePathFactory($this->logger)
-        );
+        return new ilFileValidationFactory($this->logger);
     }
 
     public function path(): ilFilePathFactoryInterface

@@ -18,29 +18,36 @@
 
 declare(strict_types=1);
 
-namespace ImportHandler\File\XML\Export\DataSet;
+namespace ILIAS\Export\ImportHandler\File\XML\Export\DataSet;
 
+use ILIAS\Export\ImportHandler\File\Namespace\ilFactory as ilFileNamespaceFactory;
+use ILIAS\Export\ImportHandler\File\Path\ilFactory as ilFilePathFactory;
+use ILIAS\Export\ImportHandler\File\Validation\Set\ilFactory as ilFileValidationSetFactory;
+use ILIAS\Export\ImportHandler\File\XML\Export\DataSet\ilHandler as ilDatasetXMLExportFileHandler;
+use ILIAS\Export\ImportHandler\File\XML\Node\Info\Attribute\ilFactory as ilXMLNodeInfoAttributeFactory;
+use ILIAS\Export\ImportHandler\File\XML\Schema\ilFactory as ilXMLFileSchemaFactory;
+use ILIAS\Export\ImportHandler\I\File\XML\Export\DataSet\ilFactoryInterface as ilDataSetXMLExportFileFactoryInterface;
+use ILIAS\Export\ImportHandler\I\File\XML\Export\DataSet\ilHandlerInterface as ilDatasetXMLExportFileHandlerInterface;
+use ILIAS\Export\ImportHandler\Parser\ilFactory as ilParserFactory;
+use ILIAS\Export\ImportStatus\ilFactory as ilImportStatusFactory;
+use ILIAS\Export\Schema\ilXmlSchemaFactory;
+use ilLanguage;
 use ilLogger;
-use ImportHandler\File\Namespace\ilFactory as ilFileNamespaceFactory;
-use ImportHandler\File\Path\ilFactory as ilFilePathFactory;
-use ImportHandler\File\XML\Node\Info\Attribute\ilFactory as ilXMLNodeInfoAttributeFactory;
-use ImportHandler\File\XSD\ilFactory as ilXSDFileFactory;
-use ImportHandler\I\File\XML\Export\DataSet\ilFactoryInterface as ilDataSetXMLExportFileFactoryInterface;
-use ImportHandler\I\File\XML\Export\DataSet\ilHandlerInterface as ilDatasetXMLExportFileHandlerInterface;
-use ImportHandler\File\XML\Export\DataSet\ilHandler as ilDatasetXMLExportFileHandler;
-use ImportHandler\Parser\ilFactory as ilParserFactory;
-use ImportStatus\ilFactory as ilImportStatusFactory;
-use ImportHandler\File\Validation\Set\ilFactory as ilFileValidationSetFactory;
-use Schema\ilXmlSchemaFactory;
 
 class ilFactory implements ilDataSetXMLExportFileFactoryInterface
 {
     protected ilLogger $logger;
+    protected ilLanguage $lng;
+    protected ilXmlSchemaFactory $schema_factory;
 
     public function __construct(
-        ilLogger $logger
+        ilLogger $logger,
+        ilLanguage $lng,
+        ilXmlSchemaFactory $schema_factory
     ) {
         $this->logger = $logger;
+        $this->lng = $lng;
+        $this->schema_factory = $schema_factory;
     }
 
     public function handler(): ilDatasetXMLExportFileHandlerInterface
@@ -48,13 +55,17 @@ class ilFactory implements ilDataSetXMLExportFileFactoryInterface
         return new ilDatasetXMLExportFileHandler(
             new ilFileNamespaceFactory(),
             new ilImportStatusFactory(),
-            new ilXmlSchemaFactory(),
+            new ilXMLFileSchemaFactory(
+                $this->logger,
+                $this->lng,
+                $this->schema_factory
+            ),
             new ilParserFactory($this->logger),
-            new ilXSDFileFactory(),
             new ilFilePathFactory($this->logger),
             $this->logger,
             new ilXMLNodeInfoAttributeFactory($this->logger),
-            new ilFileValidationSetFactory()
+            new ilFileValidationSetFactory(),
+            $this->lng
         );
     }
 }

@@ -134,7 +134,7 @@ class ilLMNavigationRendererGUI
                     $pre_id,
                     $this->lm->getPageHeader(),
                     $this->lm->isActiveNumbering(),
-                    $this->lm_set->get("time_scheduled_page_activation"),
+                    (bool) $this->lm_set->get("time_scheduled_page_activation"),
                     false,
                     0,
                     $this->lang,
@@ -200,7 +200,7 @@ class ilLMNavigationRendererGUI
                     $succ_id,
                     $this->lm->getPageHeader(),
                     $this->lm->isActiveNumbering(),
-                    $this->lm_set->get("time_scheduled_page_activation"),
+                    (bool) $this->lm_set->get("time_scheduled_page_activation"),
                     false,
                     0,
                     $this->lang,
@@ -282,7 +282,7 @@ class ilLMNavigationRendererGUI
             $active = ilLMPage::_lookupActive(
                 $node["obj_id"],
                 $this->lm->getType(),
-                $this->lm_set->get("time_scheduled_page_activation")
+                (bool) $this->lm_set->get("time_scheduled_page_activation")
             );
 
             if ($node["type"] === "pg" &&
@@ -304,10 +304,11 @@ class ilLMNavigationRendererGUI
                             $node["obj_id"],
                             $this->lm->getPageHeader(),
                             $this->lm->isActiveNumbering(),
-                            $this->lm_set->get("time_scheduled_page_activation"),
+                            (bool) $this->lm_set->get("time_scheduled_page_activation"),
                             false,
-                            0,
-                            $this->lang
+                            $this->lm->getId(),
+                            $this->lang,
+                            true
                         );
 
                     if ($this->user->getId() === ANONYMOUS_USER_ID &&
@@ -331,13 +332,14 @@ class ilLMNavigationRendererGUI
                             $node["obj_id"],
                             ilLMObject::CHAPTER_TITLE,
                             $this->lm->isActiveNumbering(),
-                            $this->lm_set->get("time_scheduled_page_activation"),
+                            (bool) $this->lm_set->get("time_scheduled_page_activation"),
                             false,
-                            0,
-                            $this->lang
+                            $this->lm->getId(),
+                            $this->lang,
+                            true
                         );
                     if ($this->user->getId() === ANONYMOUS_USER_ID &&
-                        $this->parent_gui->getObject()->getPublicAccessMode() === "selected") {
+                        $this->lm->getPublicAccessMode() === "selected") {
                         if (!ilLMObject::_isPagePublic($node["obj_id"])) {
                             $disabled = true;
                             $text .= " (" . $this->lng->txt("cont_no_access") . ")";
@@ -379,10 +381,11 @@ class ilLMNavigationRendererGUI
                 $this->current_page,
                 $this->lm->getPageHeader(),
                 $this->lm->isActiveNumbering(),
-                $this->lm_set->get("time_scheduled_page_activation"),
+                (bool) $this->lm_set->get("time_scheduled_page_activation"),
                 false,
-                0,
-                $this->lang
+                $this->lm->getId(),
+                $this->lang,
+                true
             );
         } else {
             $st_id = $this->lm_tree->getParentId($this->current_page);
@@ -391,10 +394,11 @@ class ilLMNavigationRendererGUI
                     $st_id,
                     ilLMObject::CHAPTER_TITLE,
                     $this->lm->isActiveNumbering(),
-                    $this->lm_set->get("time_scheduled_page_activation"),
+                    (bool) $this->lm_set->get("time_scheduled_page_activation"),
                     false,
-                    0,
-                    $this->lang
+                    $this->lm->getId(),
+                    $this->lang,
+                    true
                 );
             }
         }

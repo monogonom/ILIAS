@@ -103,17 +103,18 @@ class assLongMenuGUI extends assQuestionGUI implements ilGuiQuestionScoringAdjus
 
     public function writeQuestionSpecificPostData(ilPropertyFormGUI $form): void
     {
+        $min_auto_complete = (int) $form->getInput('min_auto_complete');
         $longmenu_text = $this->request->raw('longmenu_text') ?? '';
         $hidden_text_files = $this->request->raw('hidden_text_files') ?? '';
         $hidden_correct_answers = $this->request->raw('hidden_correct_answers') ?? [];
-        $long_menu_type = $this->request->raw('long_menu_type') ?? '';
+        $long_menu_type = $this->request->raw('long_menu_type') ?? [];
         $this->object->setLongMenuTextValue(ilUtil::stripSlashes($longmenu_text));
-        $this->object->setAnswers($this->trimArrayRecursive(json_decode(ilUtil::stripSlashes($hidden_text_files))));
-        $this->object->setCorrectAnswers($this->trimArrayRecursive(json_decode(ilUtil::stripSlashes($hidden_correct_answers))));
+        $this->object->setAnswers($this->trimArrayRecursive($this->stripSlashesRecursive(json_decode($hidden_text_files))));
+        $this->object->setCorrectAnswers($this->trimArrayRecursive($this->stripSlashesRecursive(json_decode($hidden_correct_answers))));
         $this->object->setAnswerType(ilArrayUtil::stripSlashesRecursive($long_menu_type));
         $this->object->setQuestion($this->request->raw('question'));
         $this->object->setLongMenuTextValue($this->request->raw('longmenu_text'));
-        $this->object->setMinAutoComplete($this->request->int('min_auto_complete'));
+        $this->object->setMinAutoComplete($min_auto_complete);
         $this->object->setIdenticalScoring($this->request->int('identical_scoring'));
 
         $this->saveTaxonomyAssignments();
@@ -127,24 +128,47 @@ class assLongMenuGUI extends assQuestionGUI implements ilGuiQuestionScoringAdjus
             "/\\[" . assLongMenu::GAP_PLACEHOLDER . " (\\d+)\\]/",
             $longmenu_text
         );
-        $answer_options_from_files = json_decode(ilUtil::stripSlashes($hidden_text_files));
+
+        $answer_options_from_files = $this->stripSlashesRecursive(json_decode($hidden_text_files));
         if (count($answer_options_from_text) - 1 !== count($answer_options_from_files)) {
             $this->tpl->setOnScreenMessage('failure', $this->lng->txt('longmenu_answeroptions_differ'));
             return false;
         }
+
+        $correct_answers = $this->stripSlashesRecursive(json_decode($this->request->raw('hidden_correct_answers')));
+        foreach($correct_answers as $answer) {
+            if (!is_numeric(str_replace(',', '.', $answer[1]))) {
+                $this->tpl->setOnScreenMessage('failure', $this->lng->txt('points_non_numeric_or_negative_msg'));
+                return false;
+            }
+        }
         return true;
     }
 
-    protected function trimArrayRecursive(array $data)
+    private function stripSlashesRecursive(array $data): array
     {
-        foreach ($data as $k => $v) {
-            if (is_array($v)) {
-                $data[$k] = $this->trimArrayRecursive($v);
-            } else {
-                $data[$k] = trim($v);
-            }
-        }
-        return $data;
+        return array_map(
+            function (string|array $v): string|array {
+                if (is_array($v)) {
+                    return $this->stripSlashesRecursive($v);
+                }
+                return ilUtil::stripSlashes($v);
+            },
+            $data
+        );
+    }
+
+    private function trimArrayRecursive(array $data): array
+    {
+        return array_map(
+            function (string|array $v): string|array {
+                if (is_array($v)) {
+                    return $this->trimArrayRecursive($v);
+                }
+                return trim($v);
+            },
+            $data
+        );
     }
 
     protected function editQuestion(ilPropertyFormGUI $form = null): void
@@ -216,12 +240,13 @@ class assLongMenuGUI extends assQuestionGUI implements ilGuiQuestionScoringAdjus
         //$modal->setBackdrop(ilModalGUI::BACKDROP_OFF);
         $modal->setBody('');
 
-        $min_auto_complete = new ilNumberInputGUI($this->lng->txt("min_auto_complete"), 'min_auto_complete');
+        $min_auto_complete = new ilNumberInputGUI($this->lng->txt('min_auto_complete'), 'min_auto_complete');
 
         $auto_complete = $this->object->getMinAutoComplete();
-        if ($auto_complete == 0) {
+        if ($auto_complete === 0) {
             $auto_complete = assLongMenu::MIN_LENGTH_AUTOCOMPLETE;
         }
+        $min_auto_complete->setDecimals(0);
         $min_auto_complete->setValue($auto_complete);
         $min_auto_complete->setMinValue(1);
         $min_auto_complete->setMaxValue(99);

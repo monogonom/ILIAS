@@ -318,30 +318,27 @@ class ilObjLearningSequenceGUI extends ilContainerGUI implements ilCtrlBaseClass
 
 
             case "ilobjlearningsequenceeditintrogui":
-                $which_page = $this->object::CP_INTRO;
+                $which_page = LSOPageType::INTRO;
                 $which_tab = self::TAB_EDIT_INTRO;
                 $gui_class = 'ilObjLearningSequenceEditIntroGUI';
                 // no break
             case "ilobjlearningsequenceeditextrogui":
-
                 if (!isset($which_page)) {
-                    $which_page = $this->object::CP_EXTRO;
+                    $which_page = LSOPageType::EXTRO;
                     $which_tab = self::TAB_EDIT_EXTRO;
-
                     $gui_class = 'ilObjLearningSequenceEditExtroGUI';
                 }
 
                 $this->addContentStyleCss();
                 $this->addSubTabsForContent($which_tab);
 
-                $page_id = $this->object->getContentPageId($which_page);
                 if (!$this->object->hasContentPage($which_page)) {
                     $this->object->createContentPage($which_page);
                 }
 
                 $gui = new $gui_class(
-                    $this->object::CP_TYPE,
-                    $page_id
+                    $which_page->value,
+                    $this->object->getContentPageId()
                 );
                 $this->ctrl->setCmd($cmd);
                 $out = $this->ctrl->forwardCommand($gui);
@@ -743,9 +740,12 @@ class ilObjLearningSequenceGUI extends ilContainerGUI implements ilCtrlBaseClass
         }
     }
 
+    /**
+     * Redirects to Manage Content to make deletion screen work.
+     */
     public function renderObject(): void
     {
-        // disables this method in ilContainerGUI
+        $this->manageContent();
     }
 
 
@@ -900,26 +900,6 @@ class ilObjLearningSequenceGUI extends ilContainerGUI implements ilCtrlBaseClass
     {
         $gui = new ilObjectAddNewItemGUI($this->object->getRefId());
         $gui->render();
-    }
-
-    /**
-    * ATTENTION: This mostly is a copy of `ilObjectGUI::confirmDeleteObject`, but does not
-    * redirect to parent afterwards, because we are, in fact, the parent.
-    */
-    public function confirmedDeleteObject(): void
-    {
-        if ($this->post_wrapper->has("mref_id")) {
-            $mref_id = $this->post_wrapper->retrieve(
-                "mref_id",
-                $this->refinery->kindlyTo()->listOf($this->refinery->kindlyTo()->int())
-            );
-            $_SESSION["saved_post"] = array_unique(array_merge($_SESSION["saved_post"], $mref_id));
-        }
-
-        $ru = new ilRepositoryTrashGUI($this);
-        $ru->deleteObjects($this->requested_ref_id, ilSession::get("saved_post") ?? []);
-        ilSession::clear("saved_post");
-        $this->ctrl->redirect($this, self::CMD_CONTENT);
     }
 
     protected function enableDragDropFileUpload(): void

@@ -243,7 +243,7 @@ class ilTestImporter extends ilXmlImporter
             $newTaxId = $mapping->getMapping(
                 'Services/Taxonomy',
                 'tax',
-                $taxId
+                (string) $taxId
             );
 
             if (!$newTaxId) {
@@ -256,7 +256,7 @@ class ilTestImporter extends ilXmlImporter
                 $newTaxNodeId = $mapping->getMapping(
                     'Services/Taxonomy',
                     'tax_tree',
-                    $taxNodeId
+                    (string) $taxNodeId
                 );
 
                 if (!$newTaxNodeId) {
@@ -332,7 +332,9 @@ class ilTestImporter extends ilXmlImporter
             $qsaImportFails = new ilAssQuestionSkillAssignmentImportFails($test_obj->getId());
             $qsaImportFails->registerFailedImports($importer->getFailedImportAssignmentList());
 
-            $test_obj->setOnline(false);
+            $test_obj->getObjectProperties()->storePropertyIsOnline(
+                $test_obj->getObjectProperties()->getPropertyIsOnline()->withOffline()
+            );
         }
 
         return $importer->getSuccessImportAssignmentList();
@@ -347,6 +349,7 @@ class ilTestImporter extends ilXmlImporter
     protected function importSkillLevelThresholds(ilImportMapping $mapping, ilAssQuestionSkillAssignmentList $assignmentList, ilObjTest $test_obj, $xmlFile)
     {
         $parser = new ilTestSkillLevelThresholdXmlParser($xmlFile);
+        $parser->initSkillLevelThresholdImportList();
         $parser->startParsing();
 
         $importer = new ilTestSkillLevelThresholdImporter($this->db);

@@ -26,7 +26,6 @@
  *
  * @extends ilSaxParser
  */
-
 use ILIAS\Filesystem\Stream\Streams;
 use ILIAS\FileUpload\MimeType;
 
@@ -150,7 +149,7 @@ class ilFileXMLParser extends ilSaxParser
                     if ($this->date === null) {
                         // Version tag comes after Content tag. Take only first (= Should be latest)
                         $this->date = $a_attribs["date"];
-                        $this->usr_id = $a_attribs["usr_id"];
+                        $this->usr_id = (int) $a_attribs["usr_id"];
                         $this->versions[0]["date"] = $this->date;
                         $this->versions[0]["usr_id"] = $this->usr_id;
                     }
@@ -205,7 +204,7 @@ class ilFileXMLParser extends ilSaxParser
      */
     public function handlerEndTag($a_xml_parser, string $a_name): void
     {
-        $this->cdata = trim($this->cdata);
+        $this->cdata = trim($this->cdata ?? '');
 
         $GLOBALS['DIC']['ilLog']->write(__METHOD__ . ': ' . $this->cdata);
 

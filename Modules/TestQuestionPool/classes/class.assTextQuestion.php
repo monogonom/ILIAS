@@ -484,7 +484,7 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
         return $result;
     }
 
-    protected function calculateReachedPointsForSolution($solution)
+    protected function calculateReachedPointsForSolution($solution): float
     {
         $solution = html_entity_decode($solution);
         // Return min points when keyword relation is NON KEYWORDS
@@ -536,7 +536,7 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
                 break;
         }
 
-        return $points;
+        return (float)$points;
     }
 
     /**
@@ -549,7 +549,7 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
      * @param boolean $returndetails (deprecated !!)
      * @return integer/array $points/$details (array $details is deprecated !!)
      */
-    public function calculateReachedPoints($active_id, $pass = null, $authorizedSolution = true, $returndetails = false)
+    public function calculateReachedPoints($active_id, $pass = null, $authorizedSolution = true, $returndetails = false): float
     {
         if ($returndetails) {
             throw new ilTestException('return details not implemented for ' . __METHOD__);
@@ -558,7 +558,6 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
         global $DIC;
         $ilDB = $DIC['ilDB'];
 
-        $points = 0;
         if (is_null($pass)) {
             $pass = $this->getSolutionMaxPass($active_id);
         }
@@ -573,7 +572,7 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
         // Return points of points are already on the row.
         $row = $ilDB->fetchAssoc($result);
         if ($row["points"] != null) {
-            return $row["points"];
+            return (float)$row["points"];
         }
 
         return $this->calculateReachedPointsForSolution($row['value1']);
@@ -1026,6 +1025,9 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
 
     public function countWords($text): int
     {
+        if($text === '') {
+            return 0;
+        }
         $text = str_replace('&nbsp;', ' ', $text);
 
         $text = preg_replace('/[.,:;!?\-_#\'"+*\\/=()&%§$]/m', '', $text);
@@ -1037,7 +1039,7 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
         return count(explode(' ', $text));
     }
 
-    public function getLatestAutosaveContent($active_id)
+    public function getLatestAutosaveContent(int $active_id, int $pass): ?string
     {
         $question_fi = $this->getId();
 
@@ -1049,6 +1051,7 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
             WHERE active_fi = ' . $this->db->quote($active_id, 'int') . '
             AND question_fi = ' . $this->db->quote($this->getId(), 'int') . '
             AND authorized = ' . $this->db->quote(0, 'int')
+            . ' AND pass = ' . $this->db->quote($pass, 'int')
         );
         $row = $this->db->fetchAssoc($cntresult);
         if ($row['cnt'] > 0) {
@@ -1059,10 +1062,11 @@ class assTextQuestion extends assQuestion implements ilObjQuestionScoringAdjusta
             WHERE active_fi = ' . $this->db->quote($active_id, 'int') . '
             AND question_fi = ' . $this->db->quote($this->getId(), 'int') . '
             AND authorized = ' . $this->db->quote(0, 'int')
+            . ' AND pass = ' . $this->db->quote($pass, 'int')
             );
             $trow = $this->db->fetchAssoc($tresult);
             return $trow['value1'];
         }
-        return '';
+        return null;
     }
 }

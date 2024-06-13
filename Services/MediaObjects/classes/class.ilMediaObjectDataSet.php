@@ -225,7 +225,7 @@ class ilMediaObjectDataSet extends ilDataSet
                         " WHERE " .
                         $ilDB->in("item_id", $a_ids, false, "integer") .
                         " ORDER BY nr", true, false) as $r) {
-                        $r["Target"] = ilUtil::insertInstIntoID($r["Target"]);
+                        $r["Target"] = ilUtil::insertInstIntoID((string) ($r["Target"] ?? ""));
 
                         // see ilPageObject::insertInstIntoIDs
                         if ($r["Type"] == "RepositoryItem") {
@@ -305,6 +305,7 @@ class ilMediaObjectDataSet extends ilDataSet
         ilImportMapping $a_mapping,
         string $a_schema_version
     ): void {
+        $a_rec = $this->stripTags($a_rec);
         switch ($a_entity) {
             case "mob":
 

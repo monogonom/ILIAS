@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * This file is part of ILIAS, a powerful learning management system
  * published by ILIAS open source e-Learning e.V.
@@ -16,8 +14,9 @@ declare(strict_types=1);
  * https://www.ilias.de
  * https://github.com/ILIAS-eLearning
  *
- ********************************************************************
- */
+ *********************************************************************/
+
+declare(strict_types=1);
 
 final class ilPDSelectedItemsBlockMembershipsObjectDatabaseRepository implements ilPDSelectedItemsBlockMembershipsObjectRepository
 {
@@ -43,9 +42,6 @@ final class ilPDSelectedItemsBlockMembershipsObjectDatabaseRepository implements
         return self::VALID_OBJECT_TYPES;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getForUser(ilObjUser $user, array $objTypes, string $actorLanguageCode): Generator
     {
         $objTypes = array_intersect($objTypes, self::VALID_OBJECT_TYPES);
@@ -57,7 +53,7 @@ final class ilPDSelectedItemsBlockMembershipsObjectDatabaseRepository implements
             'od.type',
             $objTypes,
             false,
-            'text'
+            ilDBConstants::T_TEXT
         );
 
         $res = $this->db->queryF(
@@ -111,7 +107,7 @@ final class ilPDSelectedItemsBlockMembershipsObjectDatabaseRepository implements
                 LEFT JOIN object_translation trans ON trans.obj_id = od.obj_id AND trans.lang_code = %s
                 WHERE ua.usr_id = %s
             ",
-            ['text', 'integer', 'integer', 'text', 'integer'],
+            [ilDBConstants::T_TEXT, ilDBConstants::T_INTEGER, ilDBConstants::T_INTEGER, ilDBConstants::T_TEXT, ilDBConstants::T_INTEGER],
             ['y', 1, $this->recoveryFolderId, $actorLanguageCode, $user->getId()]
         );
 
